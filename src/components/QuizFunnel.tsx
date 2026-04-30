@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CREATORS } from "@/data/creators";
+import { useEffect, useRef, useState } from "react";
+import { CREATORS, type Creator } from "@/data/creators";
 import CreatorCard from "./CreatorCard";
 import Stage from "./Stage";
 
@@ -11,6 +11,8 @@ type Step =
   | { kind: "intro" }
   | { kind: "question"; index: number }
   | { kind: "loading" }
+  | { kind: "swiping" }
+  | { kind: "matchedLoading" }
   | { kind: "results" };
 
 const QUESTIONS: { title: string; subtitle?: string; options: string[] }[] = [
@@ -40,27 +42,40 @@ const QUESTIONS: { title: string; subtitle?: string; options: string[] }[] = [
 
 const LOADING_STAGES = [
   { label: "Analyzing your style…", duration: 900 },
-  { label: "Finding creators that match…", duration: 1100 },
+  { label: "Finding profiles for you…", duration: 1100 },
   { label: "Filtering top picks…", duration: 900 },
   { label: "Almost there…", duration: 700 },
 ];
 
-function fireLead() {
+const MATCHED_STAGES = [
+  { label: "They&apos;re viewing your profile…", duration: 900 },
+  { label: "Confirming your matches…", duration: 1100 },
+  { label: "Opening their pages…", duration: 800 },
+];
+
+function firePixel(event: string, params?: Record<string, unknown>) {
   if (typeof window === "undefined") return;
   const fbq = (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq;
   if (!fbq || !PIXEL_ID) return;
-  fbq("trackSingle", PIXEL_ID, "Lead", {
-    content_name: "quiz_complete",
-    content_category: "creator_match",
-  });
+  fbq("trackSingle", PIXEL_ID, event, params);
 }
 
 export default function QuizFunnel() {
   const [step, setStep] = useState<Step>({ kind: "intro" });
+  const [likes, setLikes] = useState<string[]>([]);
 
+  // Auto-advance from "Matching" → swiping
   useEffect(() => {
     if (step.kind !== "loading") return;
     const total = LOADING_STAGES.reduce((sum, s) => sum + s.duration, 0);
+    const t = setTimeout(() => setStep({ kind: "swiping" }), total);
+    return () => clearTimeout(t);
+  }, [step.kind]);
+
+  // Auto-advance from post-swipe matching → results
+  useEffect(() => {
+    if (step.kind !== "matchedLoading") return;
+    const total = MATCHED_STAGES.reduce((sum, s) => sum + s.duration, 0);
     const t = setTimeout(() => setStep({ kind: "results" }), total);
     return () => clearTimeout(t);
   }, [step.kind]);
@@ -75,9 +90,22 @@ export default function QuizFunnel() {
     if (next < QUESTIONS.length) {
       setStep({ kind: "question", index: next });
     } else {
-      fireLead();
+      firePixel("Lead", {
+        content_name: "quiz_complete",
+        content_category: "creator_match",
+      });
       setStep({ kind: "loading" });
     }
+  }
+
+  function onSwipeComplete(likedSlugs: string[]) {
+    setLikes(likedSlugs);
+    firePixel("Lead", {
+      content_name: "swipe_complete",
+      content_category: "creator_match",
+      num_liked: likedSlugs.length,
+    });
+    setStep({ kind: "matchedLoading" });
   }
 
   return (
@@ -94,8 +122,21 @@ export default function QuizFunnel() {
           onSelect={answer}
         />
       )}
-      {step.kind === "loading" && <Loading />}
-      {step.kind === "results" && <Results />}
+      {step.kind === "loading" && (
+        <LoadingScreen
+          stages={LOADING_STAGES}
+          finalLabel="Done · loading profiles"
+        />
+      )}
+      {step.kind === "swiping" && <Swiping onComplete={onSwipeComplete} />}
+      {step.kind === "matchedLoading" && (
+        <LoadingScreen
+          stages={MATCHED_STAGES}
+          finalLabel="Match request sent"
+          mode="match"
+        />
+      )}
+      {step.kind === "results" && <Results likes={likes} />}
     </Stage>
   );
 }
@@ -135,8 +176,8 @@ function Intro({ onStart }: { onStart: () => void }) {
             </span>
           </h1>
           <p className="text-neutral-300 text-base leading-relaxed max-w-sm mx-auto">
-            Take a 60-second quiz. We&apos;ll match you with a short list of
-            creators worth following.
+            Take a 60-second quiz, swipe through creators we matched for you,
+            and connect with the ones you like.
           </p>
         </div>
 
@@ -233,28 +274,43 @@ function Question({
   );
 }
 
-function Loading() {
+/**
+ * Generic loading screen — used both after the quiz (Finding profiles…) and
+ * after the swipe deck (Confirming your matches…). Single useEffect using a
+ * timestamp-based clock so the percentage and stage advance smoothly without
+ * stuttering when the active stage changes.
+ */
+function LoadingScreen({
+  stages,
+  finalLabel,
+  mode = "default",
+}: {
+  stages: { label: string; duration: number }[];
+  finalLabel: string;
+  mode?: "default" | "match";
+}) {
   const [stage, setStage] = useState(0);
   const [percent, setPercent] = useState(0);
 
   useEffect(() => {
-    let elapsed = 0;
+    const startTime = Date.now();
     let cumulative = 0;
-    const stageEnds = LOADING_STAGES.map((s) => (cumulative += s.duration));
+    const stageEnds = stages.map((s) => (cumulative += s.duration));
     const total = stageEnds[stageEnds.length - 1];
 
     const interval = setInterval(() => {
-      elapsed += 50;
+      const elapsed = Date.now() - startTime;
       const pct = Math.min(100, Math.round((elapsed / total) * 100));
       setPercent(pct);
+
       const newStage = stageEnds.findIndex((end) => elapsed < end);
-      if (newStage >= 0 && newStage !== stage) {
-        setStage(newStage);
-      }
+      setStage(newStage === -1 ? stages.length - 1 : newStage);
+
+      if (elapsed >= total) clearInterval(interval);
     }, 50);
 
     return () => clearInterval(interval);
-  }, [stage]);
+  }, [stages]);
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10">
@@ -276,16 +332,21 @@ function Loading() {
           </div>
 
           <div className="space-y-1.5">
-            <p className="text-xl font-bold transition-all duration-300">
-              {LOADING_STAGES[stage]?.label ?? "Almost done…"}
-            </p>
+            <p
+              className="text-xl font-bold transition-all duration-300"
+              dangerouslySetInnerHTML={{
+                __html: stages[stage]?.label ?? finalLabel,
+              }}
+            />
             <p className="text-sm text-neutral-500">
-              This will only take a moment
+              {mode === "match"
+                ? "Reaching out on your behalf"
+                : "This will only take a moment"}
             </p>
           </div>
 
           <div className="space-y-2 pt-2 px-1">
-            {LOADING_STAGES.map((s, i) => (
+            {stages.map((s, i) => (
               <div
                 key={s.label}
                 className={`flex items-center gap-2.5 text-xs transition-opacity duration-300 ${
@@ -303,7 +364,10 @@ function Loading() {
                 >
                   {i < stage ? "✓" : "•"}
                 </span>
-                <span className="text-left text-white/75">{s.label}</span>
+                <span
+                  className="text-left text-white/75"
+                  dangerouslySetInnerHTML={{ __html: s.label }}
+                />
               </div>
             ))}
           </div>
@@ -313,7 +377,241 @@ function Loading() {
   );
 }
 
-function Results() {
+/**
+ * Swipe deck — Tinder-style card stack. Drag right to like, left to skip;
+ * action buttons at the bottom do the same. After every card has been
+ * swiped, calls onComplete with the slugs that were liked.
+ */
+function Swiping({
+  onComplete,
+}: {
+  onComplete: (likedSlugs: string[]) => void;
+}) {
+  const [index, setIndex] = useState(0);
+  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const [exitDir, setExitDir] = useState<"left" | "right" | null>(null);
+  const startX = useRef(0);
+  const likesRef = useRef<string[]>([]);
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  const current: Creator | undefined = CREATORS[index];
+  const next: Creator | undefined = CREATORS[index + 1];
+
+  function startDrag(clientX: number, pointerId?: number) {
+    if (exitDir) return;
+    if (pointerId !== undefined) {
+      cardRef.current?.setPointerCapture(pointerId);
+    }
+    setIsDragging(true);
+    startX.current = clientX;
+  }
+
+  function moveDrag(clientX: number) {
+    if (!isDragging || exitDir) return;
+    setDragX(clientX - startX.current);
+  }
+
+  function endDrag() {
+    if (!isDragging) return;
+    setIsDragging(false);
+    const threshold = 100;
+    if (dragX > threshold) {
+      goNext("right");
+    } else if (dragX < -threshold) {
+      goNext("left");
+    } else {
+      setDragX(0);
+    }
+  }
+
+  function goNext(dir: "left" | "right") {
+    if (!current || exitDir) return;
+    if (dir === "right") {
+      likesRef.current = [...likesRef.current, current.slug];
+    }
+    setExitDir(dir);
+    setTimeout(() => {
+      const nextIndex = index + 1;
+      if (nextIndex >= CREATORS.length) {
+        onComplete(likesRef.current);
+      } else {
+        setIndex(nextIndex);
+        setDragX(0);
+        setExitDir(null);
+      }
+    }, 350);
+  }
+
+  if (!current) return null;
+
+  const rotation =
+    exitDir === "left" ? -25 : exitDir === "right" ? 25 : dragX / 18;
+  const translateX =
+    exitDir === "left" ? -700 : exitDir === "right" ? 700 : dragX;
+  const opacity = exitDir ? 0 : 1;
+
+  const likeOpacity = Math.max(0, Math.min(1, dragX / 100));
+  const skipOpacity = Math.max(0, Math.min(1, -dragX / 100));
+
+  return (
+    <div className="min-h-screen flex flex-col px-5 py-6">
+      <div className="max-w-md w-full mx-auto flex-1 flex flex-col">
+        <div className="flex items-center justify-between mb-4">
+          <BrandHeader subtle />
+          <span className="text-[11px] font-bold tracking-wider uppercase text-white/60">
+            <span className="text-white">{index + 1}</span>
+            <span className="text-white/30"> / </span>
+            {CREATORS.length}
+          </span>
+        </div>
+
+        <p className="text-center text-xs text-neutral-400 mb-4">
+          Swipe right if you like · Swipe left to skip
+        </p>
+
+        {/* Card stack */}
+        <div className="relative flex-1 min-h-[460px] mb-5">
+          {/* Next card (depth) */}
+          {next && (
+            <div className="absolute inset-0 rounded-3xl overflow-hidden bg-neutral-900 ring-1 ring-white/10 scale-95 opacity-60">
+              {next.photo && (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={next.photo}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover"
+                />
+              )}
+              <div className="absolute inset-0 bg-black/20" />
+            </div>
+          )}
+
+          {/* Active card */}
+          <div
+            ref={cardRef}
+            className="absolute inset-0 rounded-3xl overflow-hidden bg-neutral-900 ring-1 ring-white/15 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.7)] cursor-grab active:cursor-grabbing select-none"
+            style={{
+              transform: `translateX(${translateX}px) rotate(${rotation}deg)`,
+              transition: isDragging
+                ? "none"
+                : "transform 350ms ease-out, opacity 300ms ease-out",
+              opacity,
+              touchAction: "pan-y",
+            }}
+            onPointerDown={(e) => startDrag(e.clientX, e.pointerId)}
+            onPointerMove={(e) => moveDrag(e.clientX)}
+            onPointerUp={endDrag}
+            onPointerCancel={() => {
+              setIsDragging(false);
+              setDragX(0);
+            }}
+          >
+            {current.photo ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={current.photo}
+                alt=""
+                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                draggable={false}
+              />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-neutral-700 to-neutral-900" />
+            )}
+
+            <div className="absolute inset-x-0 top-0 h-1/4 bg-gradient-to-b from-black/50 to-transparent" />
+            <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/95 via-black/55 to-transparent" />
+
+            {/* LIKE / SKIP stamps */}
+            <div
+              className="absolute top-10 right-6 text-[#4ade80] border-[3px] border-[#4ade80] rounded-2xl px-4 py-1.5 text-2xl font-extrabold rotate-12 pointer-events-none transition-opacity tracking-wider"
+              style={{ opacity: likeOpacity }}
+            >
+              LIKE
+            </div>
+            <div
+              className="absolute top-10 left-6 text-red-400 border-[3px] border-red-400 rounded-2xl px-4 py-1.5 text-2xl font-extrabold -rotate-12 pointer-events-none transition-opacity tracking-wider"
+              style={{ opacity: skipOpacity }}
+            >
+              SKIP
+            </div>
+
+            {/* Bottom info */}
+            <div className="absolute left-5 bottom-5 right-5 pointer-events-none">
+              <div className="flex items-baseline gap-2 mb-1">
+                <h2 className="text-3xl font-extrabold drop-shadow-md leading-tight">
+                  {current.name}{" "}
+                  <span className="text-white/85 font-semibold text-2xl">
+                    {current.age}
+                  </span>
+                </h2>
+                <span
+                  className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-[#3b82f6] text-white text-[10px] font-bold flex-shrink-0"
+                  title="verified"
+                >
+                  ✓
+                </span>
+              </div>
+              <p className="text-xs text-white/80 mb-2">
+                📍 {current.city}
+              </p>
+              <p className="text-sm text-white/90 leading-relaxed mb-3 line-clamp-2">
+                {current.bio}
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {current.tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="text-[10px] uppercase tracking-wider font-bold bg-white/15 backdrop-blur-md px-2 py-1 rounded-full border border-white/20"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Action buttons */}
+        <div className="flex items-center justify-center gap-5 pb-4">
+          <button
+            onClick={() => goNext("left")}
+            disabled={!!exitDir}
+            aria-label="Skip"
+            className="w-14 h-14 rounded-full bg-white/[0.06] border border-white/15 backdrop-blur-md text-red-400 text-2xl font-bold hover:scale-105 hover:border-red-400/60 active:scale-95 transition-all disabled:opacity-50"
+          >
+            ✕
+          </button>
+          <button
+            onClick={() => goNext("right")}
+            disabled={!!exitDir}
+            aria-label="Like"
+            className="w-20 h-20 rounded-full bg-gradient-pink text-white text-3xl shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+          >
+            ♥
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Results({ likes }: { likes: string[] }) {
+  // Show liked creators first; if user skipped everyone, fall back to all.
+  const ordered =
+    likes.length > 0
+      ? [
+          ...CREATORS.filter((c) => likes.includes(c.slug)),
+          ...CREATORS.filter((c) => !likes.includes(c.slug)),
+        ]
+      : CREATORS;
+
+  const matchCount = likes.length || CREATORS.length;
+  const headline =
+    likes.length > 0
+      ? `${matchCount} ${matchCount === 1 ? "creator" : "creators"} matched with you`
+      : "Your top picks";
+
   return (
     <div className="min-h-screen px-4 sm:px-6 py-10">
       <div className="max-w-6xl mx-auto animate-[fadeIn_500ms_ease-out]">
@@ -324,22 +622,21 @@ function Results() {
           <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#4ade80]/10 border border-[#4ade80]/30 backdrop-blur-md">
             <span className="text-[#4ade80] text-xs">✓</span>
             <span className="text-[11px] uppercase tracking-[0.2em] font-bold text-[#4ade80]">
-              {CREATORS.length} matches found
+              {matchCount} match{matchCount === 1 ? "" : "es"} ready
             </span>
           </div>
           <div>
             <h1 className="text-[2rem] sm:text-4xl font-extrabold tracking-tight mb-3">
-              Your top picks
+              {headline}
             </h1>
             <p className="text-sm text-neutral-400 max-w-md mx-auto">
-              Based on your answers — these creators line up with your vibe.
-              Tap any profile to view their page.
+              Tap any profile to view their page — they&apos;re expecting you.
             </p>
           </div>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
-          {CREATORS.map((c) => (
+          {ordered.map((c) => (
             <CreatorCard key={c.slug} creator={c} />
           ))}
         </div>
