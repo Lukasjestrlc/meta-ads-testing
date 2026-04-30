@@ -10,13 +10,39 @@ const PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 type Step =
   | { kind: "intro" }
   | { kind: "swiping" }
+  | { kind: "question"; index: number }
   | { kind: "matchedLoading" }
   | { kind: "results" };
 
+const QUESTIONS: { title: string; subtitle?: string; options: string[] }[] = [
+  {
+    title: "Quick — what&apos;s your style?",
+    subtitle: "Helps us pick the right one to connect you with.",
+    options: ["Chill & cozy", "Outdoorsy & fitness", "Artsy & alt", "Glam & fashion"],
+  },
+  {
+    title: "What kind of energy are you into?",
+    options: [
+      "Sweet & wholesome",
+      "Funny & playful",
+      "Bold & confident",
+      "Calm & mysterious",
+    ],
+  },
+  {
+    title: "How often do you usually message?",
+    options: ["All day", "Few times a day", "Once a day", "Now and then"],
+  },
+  {
+    title: "Last thing — what do you like most?",
+    options: ["Photos", "Short videos", "Stories", "Lives"],
+  },
+];
+
 const MATCHED_STAGES = [
-  { label: "Looking at the people you liked…", duration: 900 },
-  { label: "Confirming your matches…", duration: 1100 },
-  { label: "Opening their profiles…", duration: 800 },
+  { label: "Reviewing the people you liked…", duration: 900 },
+  { label: "Finding your strongest match…", duration: 1100 },
+  { label: "Opening her profile…", duration: 800 },
 ];
 
 function firePixel(event: string, params?: Record<string, unknown>) {
@@ -30,13 +56,37 @@ export default function QuizFunnel() {
   const [step, setStep] = useState<Step>({ kind: "intro" });
   const [likes, setLikes] = useState<string[]>([]);
 
-  // Auto-advance from "Confirming matches…" → results
+  // Auto-advance from "Confirming your matches…" → redirect (or fallback results)
   useEffect(() => {
     if (step.kind !== "matchedLoading") return;
+
+    // Fire conversion events early so they have time to flush before navigation
+    const firstLiked = likes[0];
+    if (firstLiked) {
+      const creator = CREATORS.find((c) => c.slug === firstLiked);
+      if (creator) {
+        const payload = {
+          content_name: creator.name,
+          content_ids: [firstLiked],
+          currency: "USD",
+          value: 30,
+        };
+        firePixel("Subscribe", payload);
+        firePixel("InitiateCheckout", payload);
+      }
+    }
+
     const total = MATCHED_STAGES.reduce((sum, s) => sum + s.duration, 0);
-    const t = setTimeout(() => setStep({ kind: "results" }), total);
+    const t = setTimeout(() => {
+      if (firstLiked) {
+        window.location.href = `/go?slug=${encodeURIComponent(firstLiked)}`;
+      } else {
+        // Defensive fallback — shouldn't reach here, but if no likes, show results.
+        setStep({ kind: "results" });
+      }
+    }, total);
     return () => clearTimeout(t);
-  }, [step.kind]);
+  }, [step.kind, likes]);
 
   function start() {
     firePixel("Lead", {
@@ -53,13 +103,44 @@ export default function QuizFunnel() {
       content_category: "creator_match",
       num_liked: likedSlugs.length,
     });
-    setStep({ kind: "matchedLoading" });
+    if (likedSlugs.length > 0) {
+      // They liked someone — run the quiz to confirm the match
+      setStep({ kind: "question", index: 0 });
+    } else {
+      // Skipped everyone — show the grid so they can still pick one
+      setStep({ kind: "results" });
+    }
+  }
+
+  function answer() {
+    if (step.kind !== "question") return;
+    const next = step.index + 1;
+    if (next < QUESTIONS.length) {
+      setStep({ kind: "question", index: next });
+    } else {
+      firePixel("Lead", {
+        content_name: "quiz_complete",
+        content_category: "creator_match",
+      });
+      setStep({ kind: "matchedLoading" });
+    }
   }
 
   return (
     <Stage>
       {step.kind === "intro" && <Intro onStart={start} />}
       {step.kind === "swiping" && <Swiping onComplete={onSwipeComplete} />}
+      {step.kind === "question" && (
+        <Question
+          key={step.index}
+          index={step.index}
+          total={QUESTIONS.length}
+          title={QUESTIONS[step.index].title}
+          subtitle={QUESTIONS[step.index].subtitle}
+          options={QUESTIONS[step.index].options}
+          onSelect={answer}
+        />
+      )}
       {step.kind === "matchedLoading" && (
         <LoadingScreen
           stages={MATCHED_STAGES}
@@ -107,7 +188,7 @@ function Intro({ onStart }: { onStart: () => void }) {
           </h1>
           <p className="text-neutral-300 text-base leading-relaxed max-w-sm mx-auto">
             Swipe through hand-picked creators. Tap the heart on the ones you
-            like, skip the rest. We&apos;ll connect you with your matches.
+            like, skip the rest. We&apos;ll connect you with your best match.
           </p>
         </div>
 
@@ -351,10 +432,82 @@ function Swiping({
   );
 }
 
+function Question({
+  index,
+  total,
+  title,
+  subtitle,
+  options,
+  onSelect,
+}: {
+  index: number;
+  total: number;
+  title: string;
+  subtitle?: string;
+  options: string[];
+  onSelect: () => void;
+}) {
+  const progress = (index + 1) / total;
+
+  return (
+    <div className="min-h-screen flex flex-col px-5 py-7">
+      <div className="max-w-md w-full mx-auto flex-1 flex flex-col">
+        <div className="flex items-center justify-between mb-6">
+          <BrandHeader subtle />
+          <span className="text-[11px] font-bold tracking-wider uppercase text-white/60">
+            <span className="text-white">{index + 1}</span>
+            <span className="text-white/30"> / </span>
+            {total}
+          </span>
+        </div>
+
+        <div className="h-1 bg-white/10 rounded-full overflow-hidden mb-9">
+          <div
+            className="h-full bg-gradient-pink transition-[width] duration-500 ease-out"
+            style={{ width: `${Math.round(progress * 100)}%` }}
+          />
+        </div>
+
+        <div className="animate-[fadeIn_350ms_ease-out]">
+          <h2
+            className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-2 leading-tight"
+            dangerouslySetInnerHTML={{ __html: title }}
+          />
+          {subtitle ? (
+            <p className="text-sm text-neutral-400 mb-7 leading-relaxed">
+              {subtitle}
+            </p>
+          ) : (
+            <div className="mb-7" />
+          )}
+
+          <div className="space-y-3">
+            {options.map((label) => (
+              <button
+                key={label}
+                onClick={onSelect}
+                className="group w-full flex items-center justify-between gap-3 bg-white/[0.04] hover:bg-white/[0.07] backdrop-blur-md border border-white/10 hover:border-[hsl(330_80%_70%)]/60 active:scale-[0.99] transition-all rounded-2xl px-5 py-4 text-left shadow-[0_4px_18px_rgba(0,0,0,0.18)]"
+              >
+                <span className="text-base font-semibold">{label}</span>
+                <span className="text-white/30 group-hover:text-[hsl(330_80%_70%)] group-hover:translate-x-0.5 transition-all text-lg">
+                  →
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <p className="text-[11px] text-neutral-600 mt-auto pt-8 text-center">
+          Tap whichever feels right · No wrong answers
+        </p>
+      </div>
+    </div>
+  );
+}
+
 /**
  * Loading screen with animated percentage and stage checklist. Single
- * timestamp-based clock so the % advances smoothly across all stages
- * without restarting when the active stage changes.
+ * timestamp-based clock so the % advances smoothly across all stages.
  */
 function LoadingScreen({
   stages,
