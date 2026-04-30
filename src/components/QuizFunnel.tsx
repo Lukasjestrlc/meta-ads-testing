@@ -187,8 +187,8 @@ function Intro({ onStart }: { onStart: () => void }) {
             </span>
           </h1>
           <p className="text-neutral-300 text-base leading-relaxed max-w-sm mx-auto">
-            Swipe through hand-picked creators. Tap the heart on the ones you
-            like, skip the rest. We&apos;ll connect you with your best match.
+            Swipe through hand-picked creators. Tap the heart on one
+            you&apos;d like to connect with — we&apos;ll handle the intro.
           </p>
         </div>
 
@@ -263,10 +263,18 @@ function Swiping({
 
   function goNext(dir: "left" | "right") {
     if (!current || exitDir) return;
-    if (dir === "right") {
-      likesRef.current = [...likesRef.current, current.slug];
-    }
     setExitDir(dir);
+
+    if (dir === "right") {
+      // First like ends the deck and pushes the visitor into the quiz
+      // → loading → redirect funnel for that specific creator. No need to
+      // make them swipe through everyone before a conversion path kicks in.
+      likesRef.current = [...likesRef.current, current.slug];
+      setTimeout(() => onComplete(likesRef.current), 350);
+      return;
+    }
+
+    // Skip → advance to the next card, or end deck if we're out of cards.
     setTimeout(() => {
       const nextIndex = index + 1;
       if (nextIndex >= CREATORS.length) {
