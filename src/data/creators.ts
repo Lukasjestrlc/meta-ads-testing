@@ -2,18 +2,21 @@
 // without touching any other code. Each entry is hard-coded so there's no
 // database to flag, sync, or migrate.
 //
-// Fields:
-//   slug      — unique short id; appears in /go?slug=<slug> click URLs.
-//   name      — display name shown on the card.
-//   photo     — public URL of the card image (Supabase storage, Imgix,
-//               Cloudinary, or even a hosted GitHub raw URL all work).
-//   video     — optional autoplay video URL (mp4). If set, replaces photo.
-//   destUrl   — where the click should ultimately land (Fanvue profile).
-//   activity  — small live-activity caption shown bottom-left of the card.
+// Photo guidance for Meta-friendly classification:
+// — clothed, casual, lifestyle (think TikTok/Instagram, not OF promo)
+// — outdoor / café / gym / portrait / fashion shots are great
+// — avoid: lingerie, swimsuit close-ups, bedroom shots, suggestive poses
+// The placeholder Unsplash photos below are SFW examples; replace with the
+// actual creators when you're ready (just paste new URLs in `photo`).
 
 export type Creator = {
   slug: string;
   name: string;
+  age: number;
+  city: string;
+  bio: string;
+  match: number; // fake compatibility score shown on results card (0-100)
+  tags: string[];
   photo: string | null;
   video: string | null;
   destUrl: string;
@@ -24,7 +27,13 @@ export const CREATORS: Creator[] = [
   {
     slug: "k1",
     name: "Kylie",
-    photo: null,
+    age: 23,
+    city: "Los Angeles",
+    bio: "Sun-chasing, coffee-loving, weekend hiker.",
+    match: 96,
+    tags: ["chill", "outdoorsy", "fitness"],
+    photo:
+      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800&auto=format&fit=crop&q=80",
     video: null,
     destUrl: "https://www.fanvue.com/kyliefromsweets/fv-16",
     activity: "active today",
@@ -32,7 +41,13 @@ export const CREATORS: Creator[] = [
   {
     slug: "c1",
     name: "Chloe",
-    photo: null,
+    age: 21,
+    city: "London",
+    bio: "Art-school grad, vintage finds, soft mornings.",
+    match: 94,
+    tags: ["artsy", "alt", "mellow"],
+    photo:
+      "https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=800&auto=format&fit=crop&q=80",
     video: null,
     destUrl: "https://www.fanvue.com/tinybrunettebabe/fv-18",
     activity: "popular this week",
@@ -40,7 +55,13 @@ export const CREATORS: Creator[] = [
   {
     slug: "j1",
     name: "Jane",
-    photo: null,
+    age: 24,
+    city: "New York",
+    bio: "Always exploring. Brunch, books, late-night walks.",
+    match: 92,
+    tags: ["glam", "curious", "city"],
+    photo:
+      "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800&auto=format&fit=crop&q=80",
     video: null,
     destUrl: "https://www.fanvue.com/janesweety/fv-17",
     activity: "replied today",
@@ -48,7 +69,13 @@ export const CREATORS: Creator[] = [
   {
     slug: "l1",
     name: "Lorna",
-    photo: null,
+    age: 22,
+    city: "Sydney",
+    bio: "Yoga in the morning, sunsets at the beach.",
+    match: 89,
+    tags: ["chill", "fitness", "outdoorsy"],
+    photo:
+      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=800&auto=format&fit=crop&q=80",
     video: null,
     destUrl: "https://www.fanvue.com/lorna_xlove/fv-28",
     activity: "active today",
