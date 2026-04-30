@@ -43,3 +43,14 @@ body {
 .bg-gradient-pink {
   background: linear-gradient(135deg, #f075b3, #e4677c);
 }
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
