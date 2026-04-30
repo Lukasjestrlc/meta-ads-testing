@@ -9,48 +9,14 @@ const PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 
 type Step =
   | { kind: "intro" }
-  | { kind: "question"; index: number }
-  | { kind: "loading" }
   | { kind: "swiping" }
   | { kind: "matchedLoading" }
   | { kind: "results" };
 
-const QUESTIONS: { title: string; subtitle?: string; options: string[] }[] = [
-  {
-    title: "What style do you usually like?",
-    subtitle: "We'll match you with creators in that lane.",
-    options: ["Chill & cozy", "Outdoorsy & fitness", "Artsy & alt", "Glam & fashion"],
-  },
-  {
-    title: "What kind of energy?",
-    options: [
-      "Sweet & wholesome",
-      "Funny & playful",
-      "Bold & confident",
-      "Calm & mysterious",
-    ],
-  },
-  {
-    title: "How often do you scroll socials?",
-    options: ["All day, hooked", "Few times a day", "Once a day", "Now and then"],
-  },
-  {
-    title: "Favorite type of post?",
-    options: ["Photos", "Short videos", "Stories / behind the scenes", "Lives"],
-  },
-];
-
-const LOADING_STAGES = [
-  { label: "Analyzing your style…", duration: 900 },
-  { label: "Finding profiles for you…", duration: 1100 },
-  { label: "Filtering top picks…", duration: 900 },
-  { label: "Almost there…", duration: 700 },
-];
-
 const MATCHED_STAGES = [
-  { label: "They&apos;re viewing your profile…", duration: 900 },
+  { label: "Looking at the people you liked…", duration: 900 },
   { label: "Confirming your matches…", duration: 1100 },
-  { label: "Opening their pages…", duration: 800 },
+  { label: "Opening their profiles…", duration: 800 },
 ];
 
 function firePixel(event: string, params?: Record<string, unknown>) {
@@ -64,15 +30,7 @@ export default function QuizFunnel() {
   const [step, setStep] = useState<Step>({ kind: "intro" });
   const [likes, setLikes] = useState<string[]>([]);
 
-  // Auto-advance from "Matching" → swiping
-  useEffect(() => {
-    if (step.kind !== "loading") return;
-    const total = LOADING_STAGES.reduce((sum, s) => sum + s.duration, 0);
-    const t = setTimeout(() => setStep({ kind: "swiping" }), total);
-    return () => clearTimeout(t);
-  }, [step.kind]);
-
-  // Auto-advance from post-swipe matching → results
+  // Auto-advance from "Confirming matches…" → results
   useEffect(() => {
     if (step.kind !== "matchedLoading") return;
     const total = MATCHED_STAGES.reduce((sum, s) => sum + s.duration, 0);
@@ -81,21 +39,11 @@ export default function QuizFunnel() {
   }, [step.kind]);
 
   function start() {
-    setStep({ kind: "question", index: 0 });
-  }
-
-  function answer() {
-    if (step.kind !== "question") return;
-    const next = step.index + 1;
-    if (next < QUESTIONS.length) {
-      setStep({ kind: "question", index: next });
-    } else {
-      firePixel("Lead", {
-        content_name: "quiz_complete",
-        content_category: "creator_match",
-      });
-      setStep({ kind: "loading" });
-    }
+    firePixel("Lead", {
+      content_name: "started_swiping",
+      content_category: "creator_match",
+    });
+    setStep({ kind: "swiping" });
   }
 
   function onSwipeComplete(likedSlugs: string[]) {
@@ -111,29 +59,11 @@ export default function QuizFunnel() {
   return (
     <Stage>
       {step.kind === "intro" && <Intro onStart={start} />}
-      {step.kind === "question" && (
-        <Question
-          key={step.index}
-          index={step.index}
-          total={QUESTIONS.length}
-          title={QUESTIONS[step.index].title}
-          subtitle={QUESTIONS[step.index].subtitle}
-          options={QUESTIONS[step.index].options}
-          onSelect={answer}
-        />
-      )}
-      {step.kind === "loading" && (
-        <LoadingScreen
-          stages={LOADING_STAGES}
-          finalLabel="Done · loading profiles"
-        />
-      )}
       {step.kind === "swiping" && <Swiping onComplete={onSwipeComplete} />}
       {step.kind === "matchedLoading" && (
         <LoadingScreen
           stages={MATCHED_STAGES}
           finalLabel="Match request sent"
-          mode="match"
         />
       )}
       {step.kind === "results" && <Results likes={likes} />}
@@ -176,8 +106,8 @@ function Intro({ onStart }: { onStart: () => void }) {
             </span>
           </h1>
           <p className="text-neutral-300 text-base leading-relaxed max-w-sm mx-auto">
-            Take a 60-second quiz, swipe through creators we matched for you,
-            and connect with the ones you like.
+            Swipe through hand-picked creators. Tap the heart on the ones you
+            like, skip the rest. We&apos;ll connect you with your matches.
           </p>
         </div>
 
@@ -185,7 +115,7 @@ function Intro({ onStart }: { onStart: () => void }) {
           onClick={onStart}
           className="w-full bg-gradient-pink text-white font-bold py-4 rounded-full text-base shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] hover:shadow-[0_12px_36px_-4px_rgba(240,117,179,0.8)] active:scale-[0.98] transition-all"
         >
-          Start the quiz →
+          Start swiping →
         </button>
 
         <div className="flex items-center justify-center gap-4 text-[11px] text-neutral-400">
@@ -195,182 +125,7 @@ function Intro({ onStart }: { onStart: () => void }) {
           <span className="text-neutral-700">·</span>
           <span>12k matches this week</span>
           <span className="text-neutral-700">·</span>
-          <span>60s</span>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function Question({
-  index,
-  total,
-  title,
-  subtitle,
-  options,
-  onSelect,
-}: {
-  index: number;
-  total: number;
-  title: string;
-  subtitle?: string;
-  options: string[];
-  onSelect: () => void;
-}) {
-  const progress = (index + 1) / total;
-
-  return (
-    <div className="min-h-screen flex flex-col px-5 py-7">
-      <div className="max-w-md w-full mx-auto flex-1 flex flex-col">
-        <div className="flex items-center justify-between mb-6">
-          <BrandHeader subtle />
-          <span className="text-[11px] font-bold tracking-wider uppercase text-white/60">
-            <span className="text-white">{index + 1}</span>
-            <span className="text-white/30"> / </span>
-            {total}
-          </span>
-        </div>
-
-        <div className="h-1 bg-white/10 rounded-full overflow-hidden mb-9">
-          <div
-            className="h-full bg-gradient-pink transition-[width] duration-500 ease-out"
-            style={{ width: `${Math.round(progress * 100)}%` }}
-          />
-        </div>
-
-        <div className="animate-[fadeIn_350ms_ease-out]">
-          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-2 leading-tight">
-            {title}
-          </h2>
-          {subtitle ? (
-            <p className="text-sm text-neutral-400 mb-7 leading-relaxed">
-              {subtitle}
-            </p>
-          ) : (
-            <div className="mb-7" />
-          )}
-
-          <div className="space-y-3">
-            {options.map((label) => (
-              <button
-                key={label}
-                onClick={onSelect}
-                className="group w-full flex items-center justify-between gap-3 bg-white/[0.04] hover:bg-white/[0.07] backdrop-blur-md border border-white/10 hover:border-[hsl(330_80%_70%)]/60 active:scale-[0.99] transition-all rounded-2xl px-5 py-4 text-left shadow-[0_4px_18px_rgba(0,0,0,0.18)]"
-              >
-                <span className="text-base font-semibold">{label}</span>
-                <span className="text-white/30 group-hover:text-[hsl(330_80%_70%)] group-hover:translate-x-0.5 transition-all text-lg">
-                  →
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <p className="text-[11px] text-neutral-600 mt-auto pt-8 text-center">
-          Tap whichever feels right · No wrong answers
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Generic loading screen — used both after the quiz (Finding profiles…) and
- * after the swipe deck (Confirming your matches…). Single useEffect using a
- * timestamp-based clock so the percentage and stage advance smoothly without
- * stuttering when the active stage changes.
- */
-function LoadingScreen({
-  stages,
-  finalLabel,
-  mode = "default",
-}: {
-  stages: { label: string; duration: number }[];
-  finalLabel: string;
-  mode?: "default" | "match";
-}) {
-  const [stage, setStage] = useState(0);
-  const [percent, setPercent] = useState(0);
-
-  useEffect(() => {
-    const startTime = Date.now();
-    let cumulative = 0;
-    const stageEnds = stages.map((s) => (cumulative += s.duration));
-    const total = stageEnds[stageEnds.length - 1];
-
-    const interval = setInterval(() => {
-      const elapsed = Date.now() - startTime;
-      const pct = Math.min(100, Math.round((elapsed / total) * 100));
-      setPercent(pct);
-
-      const newStage = stageEnds.findIndex((end) => elapsed < end);
-      setStage(newStage === -1 ? stages.length - 1 : newStage);
-
-      if (elapsed >= total) clearInterval(interval);
-    }, 50);
-
-    return () => clearInterval(interval);
-  }, [stages]);
-
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10">
-      <div className="max-w-sm w-full animate-[fadeIn_300ms_ease-out]">
-        <div className="flex justify-center mb-7">
-          <BrandHeader subtle />
-        </div>
-
-        <div className="text-center space-y-6">
-          <div className="relative w-24 h-24 mx-auto">
-            <div className="absolute inset-0 rounded-full border-2 border-white/10" />
-            <div
-              className="absolute inset-0 rounded-full border-2 border-transparent border-t-[hsl(330_80%_70%)] animate-spin"
-              style={{ animationDuration: "1.2s" }}
-            />
-            <div className="absolute inset-1 rounded-full bg-white/[0.04] backdrop-blur-md flex items-center justify-center text-2xl font-extrabold tabular-nums">
-              {percent}%
-            </div>
-          </div>
-
-          <div className="space-y-1.5">
-            <p
-              className="text-xl font-bold transition-all duration-300"
-              dangerouslySetInnerHTML={{
-                __html: stages[stage]?.label ?? finalLabel,
-              }}
-            />
-            <p className="text-sm text-neutral-500">
-              {mode === "match"
-                ? "Reaching out on your behalf"
-                : "This will only take a moment"}
-            </p>
-          </div>
-
-          <div className="space-y-2 pt-2 px-1">
-            {stages.map((s, i) => (
-              <div
-                key={s.label}
-                className={`flex items-center gap-2.5 text-xs transition-opacity duration-300 ${
-                  i <= stage ? "opacity-100" : "opacity-30"
-                }`}
-              >
-                <span
-                  className={`w-3.5 h-3.5 rounded-full grid place-items-center text-[8px] flex-shrink-0 ${
-                    i < stage
-                      ? "bg-[#4ade80] text-black"
-                      : i === stage
-                        ? "bg-[hsl(330_80%_70%)] text-white animate-pulse"
-                        : "bg-white/10 text-white/30"
-                  }`}
-                >
-                  {i < stage ? "✓" : "•"}
-                </span>
-                <span
-                  className="text-left text-white/75"
-                  dangerouslySetInnerHTML={{ __html: s.label }}
-                />
-              </div>
-            ))}
-          </div>
+          <span>30s</span>
         </div>
       </div>
     </div>
@@ -467,7 +222,7 @@ function Swiping({
         </div>
 
         <p className="text-center text-xs text-neutral-400 mb-4">
-          Swipe right if you like · Swipe left to skip
+          Swipe right to like · Swipe left to skip
         </p>
 
         {/* Card stack */}
@@ -590,6 +345,98 @@ function Swiping({
           >
             ♥
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Loading screen with animated percentage and stage checklist. Single
+ * timestamp-based clock so the % advances smoothly across all stages
+ * without restarting when the active stage changes.
+ */
+function LoadingScreen({
+  stages,
+  finalLabel,
+}: {
+  stages: { label: string; duration: number }[];
+  finalLabel: string;
+}) {
+  const [stage, setStage] = useState(0);
+  const [percent, setPercent] = useState(0);
+
+  useEffect(() => {
+    const startTime = Date.now();
+    let cumulative = 0;
+    const stageEnds = stages.map((s) => (cumulative += s.duration));
+    const total = stageEnds[stageEnds.length - 1];
+
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const pct = Math.min(100, Math.round((elapsed / total) * 100));
+      setPercent(pct);
+
+      const newStage = stageEnds.findIndex((end) => elapsed < end);
+      setStage(newStage === -1 ? stages.length - 1 : newStage);
+
+      if (elapsed >= total) clearInterval(interval);
+    }, 50);
+
+    return () => clearInterval(interval);
+  }, [stages]);
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10">
+      <div className="max-w-sm w-full animate-[fadeIn_300ms_ease-out]">
+        <div className="flex justify-center mb-7">
+          <BrandHeader subtle />
+        </div>
+
+        <div className="text-center space-y-6">
+          <div className="relative w-24 h-24 mx-auto">
+            <div className="absolute inset-0 rounded-full border-2 border-white/10" />
+            <div
+              className="absolute inset-0 rounded-full border-2 border-transparent border-t-[hsl(330_80%_70%)] animate-spin"
+              style={{ animationDuration: "1.2s" }}
+            />
+            <div className="absolute inset-1 rounded-full bg-white/[0.04] backdrop-blur-md flex items-center justify-center text-2xl font-extrabold tabular-nums">
+              {percent}%
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-xl font-bold transition-all duration-300">
+              {stages[stage]?.label ?? finalLabel}
+            </p>
+            <p className="text-sm text-neutral-500">
+              Reaching out on your behalf
+            </p>
+          </div>
+
+          <div className="space-y-2 pt-2 px-1">
+            {stages.map((s, i) => (
+              <div
+                key={s.label}
+                className={`flex items-center gap-2.5 text-xs transition-opacity duration-300 ${
+                  i <= stage ? "opacity-100" : "opacity-30"
+                }`}
+              >
+                <span
+                  className={`w-3.5 h-3.5 rounded-full grid place-items-center text-[8px] flex-shrink-0 ${
+                    i < stage
+                      ? "bg-[#4ade80] text-black"
+                      : i === stage
+                        ? "bg-[hsl(330_80%_70%)] text-white animate-pulse"
+                        : "bg-white/10 text-white/30"
+                  }`}
+                >
+                  {i < stage ? "✓" : "•"}
+                </span>
+                <span className="text-left text-white/75">{s.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
