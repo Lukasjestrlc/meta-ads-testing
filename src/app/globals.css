@@ -1,0 +1,45 @@
+@import "tailwindcss";
+
+:root {
+  --background: 0 0% 4%;
+  --foreground: 0 0% 95%;
+  --card: 0 0% 8%;
+  --card-foreground: 0 0% 95%;
+  --primary: 142 69% 58%;
+  --primary-foreground: 0 0% 5%;
+  --muted: 0 0% 15%;
+  --muted-foreground: 0 0% 60%;
+  --border: 0 0% 18%;
+  --radius: 1.5rem;
+  --pink-accent: 330 80% 70%;
+}
+
+@theme inline {
+  --color-bg: hsl(var(--background));
+  --color-fg: hsl(var(--foreground));
+  --color-card: hsl(var(--card));
+  --color-card-fg: hsl(var(--card-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-fg: hsl(var(--muted-foreground));
+  --color-border: hsl(var(--border));
+  --color-primary: hsl(var(--primary));
+  --color-primary-fg: hsl(var(--primary-foreground));
+  --color-pink: hsl(var(--pink-accent));
+  --font-sans: var(--font-sans);
+  --radius: var(--radius);
+}
+
+html,
+body {
+  background: hsl(var(--background));
+  color: hsl(var(--foreground));
+}
+
+body {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-weight: 500;
+}
+
+.bg-gradient-pink {
+  background: linear-gradient(135deg, #f075b3, #e4677c);
+}
