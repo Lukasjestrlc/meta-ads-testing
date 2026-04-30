@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CREATORS } from "@/data/creators";
 import CreatorCard from "./CreatorCard";
+import Stage from "./Stage";
 
 const PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 
@@ -79,55 +80,61 @@ export default function QuizFunnel() {
     }
   }
 
-  if (step.kind === "intro") return <Intro onStart={start} />;
-  if (step.kind === "question") {
-    const q = QUESTIONS[step.index];
-    return (
-      <Question
-        key={step.index}
-        index={step.index}
-        total={QUESTIONS.length}
-        title={q.title}
-        subtitle={q.subtitle}
-        options={q.options}
-        onSelect={answer}
-      />
-    );
-  }
-  if (step.kind === "loading") return <Loading />;
-  return <Results />;
+  return (
+    <Stage>
+      {step.kind === "intro" && <Intro onStart={start} />}
+      {step.kind === "question" && (
+        <Question
+          key={step.index}
+          index={step.index}
+          total={QUESTIONS.length}
+          title={QUESTIONS[step.index].title}
+          subtitle={QUESTIONS[step.index].subtitle}
+          options={QUESTIONS[step.index].options}
+          onSelect={answer}
+        />
+      )}
+      {step.kind === "loading" && <Loading />}
+      {step.kind === "results" && <Results />}
+    </Stage>
+  );
+}
+
+// ─────────────────────── shared elements ───────────────────────
+
+function BrandHeader({ subtle = false }: { subtle?: boolean }) {
+  return (
+    <div
+      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.06] border border-white/10 backdrop-blur-md ${
+        subtle ? "" : "shadow-[0_4px_18px_rgba(0,0,0,0.25)]"
+      }`}
+    >
+      <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+      <span className="text-[11px] uppercase tracking-[0.2em] font-bold text-white/85">
+        peach club
+      </span>
+    </div>
+  );
 }
 
 // ─────────────────────── screens ───────────────────────
 
 function Intro({ onStart }: { onStart: () => void }) {
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center px-5 py-10 text-white relative overflow-hidden">
-      {/* Background gradient blobs for visual interest, no photos */}
-      <div
-        aria-hidden
-        className="absolute inset-0 -z-10 opacity-50"
-        style={{
-          background:
-            "radial-gradient(circle at 20% 20%, hsl(330 80% 50% / 0.35) 0%, transparent 50%), radial-gradient(circle at 80% 80%, hsl(280 70% 50% / 0.28) 0%, transparent 50%), hsl(0 0% 4%)",
-        }}
-      />
+    <div className="min-h-screen flex flex-col items-center justify-center px-5 py-12">
+      <div className="max-w-md w-full text-center space-y-7 animate-[fadeIn_500ms_ease-out]">
+        <div className="flex justify-center">
+          <BrandHeader />
+        </div>
 
-      <div className="max-w-md w-full text-center space-y-8 animate-[fadeIn_500ms_ease-out]">
         <div>
-          <div className="inline-flex items-center gap-2 mb-5 px-3 py-1.5 rounded-full bg-white/[0.06] border border-white/10 backdrop-blur-sm">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
-            <span className="text-[11px] uppercase tracking-[0.2em] font-bold text-white/80">
-              peach club
-            </span>
-          </div>
-          <h1 className="text-[2.5rem] sm:text-5xl font-extrabold tracking-tight leading-[1.05] mb-4">
+          <h1 className="text-[2.5rem] sm:text-[3.5rem] font-extrabold tracking-tight leading-[1.05] mb-4">
             Find creators that{" "}
-            <span className="bg-gradient-to-r from-[hsl(330_80%_70%)] to-[hsl(20_90%_70%)] bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-[hsl(330_80%_75%)] via-[hsl(355_85%_75%)] to-[hsl(20_90%_70%)] bg-clip-text text-transparent">
               match your vibe
             </span>
           </h1>
-          <p className="text-neutral-300 text-base leading-relaxed">
+          <p className="text-neutral-300 text-base leading-relaxed max-w-sm mx-auto">
             Take a 60-second quiz. We&apos;ll match you with a short list of
             creators worth following.
           </p>
@@ -140,7 +147,7 @@ function Intro({ onStart }: { onStart: () => void }) {
           Start the quiz →
         </button>
 
-        <div className="flex items-center justify-center gap-5 text-[11px] text-neutral-400">
+        <div className="flex items-center justify-center gap-4 text-[11px] text-neutral-400">
           <span className="flex items-center gap-1.5">
             <span className="text-[hsl(330_80%_70%)]">★</span> 4.8 rating
           </span>
@@ -150,7 +157,7 @@ function Intro({ onStart }: { onStart: () => void }) {
           <span>60s</span>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -172,12 +179,14 @@ function Question({
   const progress = (index + 1) / total;
 
   return (
-    <main className="min-h-screen flex flex-col px-5 py-7 bg-[hsl(0_0%_4%)] text-white">
+    <div className="min-h-screen flex flex-col px-5 py-7">
       <div className="max-w-md w-full mx-auto flex-1 flex flex-col">
-        <div className="flex items-center justify-between mb-6 text-[11px] font-semibold tracking-wider uppercase text-white/60">
-          <span>peach club</span>
-          <span>
-            {index + 1} <span className="text-white/30">of</span> {total}
+        <div className="flex items-center justify-between mb-6">
+          <BrandHeader subtle />
+          <span className="text-[11px] font-bold tracking-wider uppercase text-white/60">
+            <span className="text-white">{index + 1}</span>
+            <span className="text-white/30"> / </span>
+            {total}
           </span>
         </div>
 
@@ -192,23 +201,23 @@ function Question({
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-2 leading-tight">
             {title}
           </h2>
-          {subtitle && (
+          {subtitle ? (
             <p className="text-sm text-neutral-400 mb-7 leading-relaxed">
               {subtitle}
             </p>
+          ) : (
+            <div className="mb-7" />
           )}
-          {!subtitle && <div className="mb-7" />}
 
           <div className="space-y-3">
-            {options.map((label, i) => (
+            {options.map((label) => (
               <button
                 key={label}
                 onClick={onSelect}
-                className="group w-full flex items-center justify-between gap-3 bg-[hsl(0_0%_8%)] border border-white/10 hover:border-[hsl(330_80%_70%)] hover:bg-[hsl(0_0%_10%)] active:scale-[0.99] transition-all rounded-2xl px-5 py-4 text-left"
-                style={{ animationDelay: `${i * 50}ms` }}
+                className="group w-full flex items-center justify-between gap-3 bg-white/[0.04] hover:bg-white/[0.07] backdrop-blur-md border border-white/10 hover:border-[hsl(330_80%_70%)]/60 active:scale-[0.99] transition-all rounded-2xl px-5 py-4 text-left shadow-[0_4px_18px_rgba(0,0,0,0.18)]"
               >
                 <span className="text-base font-semibold">{label}</span>
-                <span className="text-white/30 group-hover:text-[hsl(330_80%_70%)] transition-colors text-lg">
+                <span className="text-white/30 group-hover:text-[hsl(330_80%_70%)] group-hover:translate-x-0.5 transition-all text-lg">
                   →
                 </span>
               </button>
@@ -220,7 +229,7 @@ function Question({
           Tap whichever feels right · No wrong answers
         </p>
       </div>
-    </main>
+    </div>
   );
 }
 
@@ -248,74 +257,85 @@ function Loading() {
   }, [stage]);
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center px-5 bg-[hsl(0_0%_4%)] text-white">
-      <div className="max-w-sm w-full text-center space-y-6 animate-[fadeIn_300ms_ease-out]">
-        <div className="relative w-20 h-20 mx-auto">
-          <div className="absolute inset-0 rounded-full border-2 border-white/10" />
-          <div
-            className="absolute inset-0 rounded-full border-2 border-transparent border-t-[hsl(330_80%_70%)] animate-spin"
-            style={{ animationDuration: "1.2s" }}
-          />
-          <div className="absolute inset-0 flex items-center justify-center text-2xl font-extrabold tabular-nums text-white">
-            {percent}%
-          </div>
+    <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10">
+      <div className="max-w-sm w-full animate-[fadeIn_300ms_ease-out]">
+        <div className="flex justify-center mb-7">
+          <BrandHeader subtle />
         </div>
 
-        <div className="space-y-1.5">
-          <p className="text-xl font-bold transition-all duration-300">
-            {LOADING_STAGES[stage]?.label ?? "Almost done…"}
-          </p>
-          <p className="text-sm text-neutral-500">
-            This will only take a moment
-          </p>
-        </div>
-
-        <div className="space-y-1.5 pt-2">
-          {LOADING_STAGES.map((s, i) => (
+        <div className="text-center space-y-6">
+          <div className="relative w-24 h-24 mx-auto">
+            <div className="absolute inset-0 rounded-full border-2 border-white/10" />
             <div
-              key={s.label}
-              className={`flex items-center gap-2 text-xs transition-opacity duration-300 ${
-                i <= stage ? "opacity-100" : "opacity-30"
-              }`}
-            >
-              <span
-                className={`w-3.5 h-3.5 rounded-full grid place-items-center text-[8px] flex-shrink-0 ${
-                  i < stage
-                    ? "bg-[#4ade80] text-black"
-                    : i === stage
-                      ? "bg-[hsl(330_80%_70%)] text-white animate-pulse"
-                      : "bg-white/10 text-white/30"
+              className="absolute inset-0 rounded-full border-2 border-transparent border-t-[hsl(330_80%_70%)] animate-spin"
+              style={{ animationDuration: "1.2s" }}
+            />
+            <div className="absolute inset-1 rounded-full bg-white/[0.04] backdrop-blur-md flex items-center justify-center text-2xl font-extrabold tabular-nums">
+              {percent}%
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <p className="text-xl font-bold transition-all duration-300">
+              {LOADING_STAGES[stage]?.label ?? "Almost done…"}
+            </p>
+            <p className="text-sm text-neutral-500">
+              This will only take a moment
+            </p>
+          </div>
+
+          <div className="space-y-2 pt-2 px-1">
+            {LOADING_STAGES.map((s, i) => (
+              <div
+                key={s.label}
+                className={`flex items-center gap-2.5 text-xs transition-opacity duration-300 ${
+                  i <= stage ? "opacity-100" : "opacity-30"
                 }`}
               >
-                {i < stage ? "✓" : "•"}
-              </span>
-              <span className="text-left text-white/70">{s.label}</span>
-            </div>
-          ))}
+                <span
+                  className={`w-3.5 h-3.5 rounded-full grid place-items-center text-[8px] flex-shrink-0 ${
+                    i < stage
+                      ? "bg-[#4ade80] text-black"
+                      : i === stage
+                        ? "bg-[hsl(330_80%_70%)] text-white animate-pulse"
+                        : "bg-white/10 text-white/30"
+                  }`}
+                >
+                  {i < stage ? "✓" : "•"}
+                </span>
+                <span className="text-left text-white/75">{s.label}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }
 
 function Results() {
   return (
-    <main className="min-h-screen px-4 sm:px-6 py-10 bg-[hsl(0_0%_4%)] text-white">
+    <div className="min-h-screen px-4 sm:px-6 py-10">
       <div className="max-w-6xl mx-auto animate-[fadeIn_500ms_ease-out]">
-        <div className="text-center mb-8 sm:mb-10">
-          <div className="inline-flex items-center gap-2 mb-4 px-3 py-1.5 rounded-full bg-[#4ade80]/10 border border-[#4ade80]/30">
+        <div className="text-center mb-8 sm:mb-10 space-y-4">
+          <div className="flex justify-center">
+            <BrandHeader subtle />
+          </div>
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-[#4ade80]/10 border border-[#4ade80]/30 backdrop-blur-md">
             <span className="text-[#4ade80] text-xs">✓</span>
             <span className="text-[11px] uppercase tracking-[0.2em] font-bold text-[#4ade80]">
               {CREATORS.length} matches found
             </span>
           </div>
-          <h1 className="text-[2rem] sm:text-4xl font-extrabold tracking-tight mb-3">
-            Your top picks
-          </h1>
-          <p className="text-sm text-neutral-400 max-w-md mx-auto">
-            Based on your answers — these creators line up with your vibe. Tap
-            any profile to view their page.
-          </p>
+          <div>
+            <h1 className="text-[2rem] sm:text-4xl font-extrabold tracking-tight mb-3">
+              Your top picks
+            </h1>
+            <p className="text-sm text-neutral-400 max-w-md mx-auto">
+              Based on your answers — these creators line up with your vibe.
+              Tap any profile to view their page.
+            </p>
+          </div>
         </div>
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-5">
@@ -329,6 +349,6 @@ function Results() {
           under their own platform terms.
         </p>
       </div>
-    </main>
+    </div>
   );
 }

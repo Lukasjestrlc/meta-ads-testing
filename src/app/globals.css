@@ -54,3 +54,35 @@ body {
     transform: translateY(0);
   }
 }
+
+/* Slow, subtle drift on the background gradient blobs so the page feels
+   alive without distracting from content. */
+@keyframes drift1 {
+  0%,
+  100% {
+    transform: translate3d(-10%, -5%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(8%, 5%, 0) scale(1.1);
+  }
+}
+
+@keyframes drift2 {
+  0%,
+  100% {
+    transform: translate3d(10%, 5%, 0) scale(1.05);
+  }
+  50% {
+    transform: translate3d(-8%, -8%, 0) scale(0.95);
+  }
+}
+
+@keyframes drift3 {
+  0%,
+  100% {
+    transform: translate3d(0%, 10%, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(5%, -10%, 0) scale(1.08);
+  }
+}
