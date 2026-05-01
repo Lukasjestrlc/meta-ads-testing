@@ -12,56 +12,9 @@ type Step =
   | { kind: "swiping" }
   | { kind: "wheel" }
   | { kind: "match" }
-  | { kind: "question"; index: number }
   | { kind: "prep" }
   | { kind: "matchedLoading" }
   | { kind: "results" };
-
-// Questions are framed as her getting to know him before they start chatting,
-// so it feels like setting up a real conversation rather than a survey. The
-// arc is: vibe → content prefs → timing → message style. The opener-pick
-// step that used to live here was misleading (no chat input on the next
-// page), so it was replaced with the Prep screen that explicitly sets up
-// account-creation expectations on Fanvue.
-function buildQuestions(name: string) {
-  return [
-    {
-      title: "Quick — what's your vibe?",
-      subtitle: `${name} likes to match her energy to who she's chatting with.`,
-      options: [
-        "Sweet & playful",
-        "Flirty & bold",
-        "Funny & casual",
-        "Quiet & deep",
-      ],
-    },
-    {
-      title: "What kind of content do you enjoy most?",
-      subtitle: "She'll prioritize this in your DMs.",
-      options: [
-        "Selfies & photos",
-        "Behind-the-scenes videos",
-        "Voice notes",
-        "A mix of everything",
-      ],
-    },
-    {
-      title: "When are you usually in the mood to chat?",
-      subtitle: `${name} will know when to send.`,
-      options: ["Mornings", "Afternoons", "Evenings", "Late at night"],
-    },
-    {
-      title: "How do you usually message someone new?",
-      subtitle: "No wrong answer — she just wants to match your energy.",
-      options: [
-        "Confident — I make the first move",
-        "Easy-going — let it flow",
-        "Shy at first — warm up fast",
-        "Mysterious — a little chase",
-      ],
-    },
-  ];
-}
 
 function buildMatchedStages(name: string) {
   return [
@@ -82,12 +35,11 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
   const [step, setStep] = useState<Step>({ kind: "intro" });
   const [likes, setLikes] = useState<string[]>([]);
 
-  // The quiz and loading copy are personalized to the first creator the user
-  // liked — this is the one we'll redirect them to. If somehow likes is empty
-  // we fall back to the first creator just so the strings have a name.
+  // The funnel copy is personalized to the first creator the user liked —
+  // this is the one we'll redirect them to. If somehow likes is empty we
+  // fall back to the first creator just so the strings have a name.
   const targetCreator =
     creators.find((c) => c.slug === likes[0]) ?? creators[0];
-  const questions = buildQuestions(targetCreator.name);
   const matchedStages = buildMatchedStages(targetCreator.name);
 
   useEffect(() => {
@@ -165,24 +117,10 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
       content_name: "match_continue",
       content_category: "creator_match",
     });
-    setStep({ kind: "question", index: 0 });
-  }
-
-  function answer() {
-    if (step.kind !== "question") return;
-    const next = step.index + 1;
-    if (next < questions.length) {
-      setStep({ kind: "question", index: next });
-    } else {
-      firePixel("Lead", {
-        content_name: "quiz_complete",
-        content_category: "creator_match",
-      });
-      // Prep screen sets account-creation expectations before the redirect
-      // — Fanvue requires signup, and the visitor bounces from cold paywalls
-      // unless they're warmed up to the idea first.
-      setStep({ kind: "prep" });
-    }
+    // Quiz step was removed — the wheel + match screen already do the
+    // commitment work, so we go straight to the prep step that sets up
+    // the Fanvue signup expectation.
+    setStep({ kind: "prep" });
   }
 
   function onPrepContinue() {
@@ -207,17 +145,6 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
       )}
       {step.kind === "match" && (
         <Match creator={targetCreator} onContinue={onMatchContinue} />
-      )}
-      {step.kind === "question" && (
-        <Question
-          key={step.index}
-          index={step.index}
-          total={questions.length}
-          title={questions[step.index].title}
-          subtitle={questions[step.index].subtitle}
-          options={questions[step.index].options}
-          onSelect={answer}
-        />
       )}
       {step.kind === "prep" && (
         <Prep creator={targetCreator} onContinue={onPrepContinue} />
@@ -933,12 +860,12 @@ function Match({
 
         <div className="space-y-1">
           <p className="text-sm text-neutral-300 leading-relaxed px-2">
-            She&apos;s online now. A couple quick things so she knows what
-            you&apos;re into before you message her.
+            She&apos;s online now and ready to chat. Your free trial is
+            active — open her page to send your first message.
           </p>
           <div className="inline-flex items-center gap-1.5 mt-2 text-[11px] text-[#4ade80]">
             <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
-            takes less than 30 seconds
+            she replied 2 min ago
           </div>
         </div>
 
@@ -946,90 +873,13 @@ function Match({
           onClick={onContinue}
           className="w-full bg-gradient-pink text-white font-bold py-4 rounded-full text-base shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] hover:shadow-[0_12px_36px_-4px_rgba(240,117,179,0.8)] active:scale-[0.98] transition-all"
         >
-          Set up my chat →
+          Open her chat →
         </button>
       </div>
     </div>
   );
 }
 
-function Question({
-  index,
-  total,
-  title,
-  subtitle,
-  options,
-  onSelect,
-}: {
-  index: number;
-  total: number;
-  title: string;
-  subtitle?: string;
-  options: string[];
-  onSelect: () => void;
-}) {
-  const progress = (index + 1) / total;
-
-  return (
-    <div className="min-h-screen flex flex-col px-5 py-7">
-      <div className="max-w-md w-full mx-auto flex-1 flex flex-col">
-        <div className="flex items-center justify-between mb-6">
-          <BrandHeader subtle />
-          <span className="text-[11px] font-bold tracking-wider uppercase text-white/60">
-            <span className="text-white">{index + 1}</span>
-            <span className="text-white/30"> / </span>
-            {total}
-          </span>
-        </div>
-
-        <div className="h-1 bg-white/10 rounded-full overflow-hidden mb-9">
-          <div
-            className="h-full bg-gradient-pink transition-[width] duration-500 ease-out"
-            style={{ width: `${Math.round(progress * 100)}%` }}
-          />
-        </div>
-
-        <div className="animate-[fadeIn_350ms_ease-out]">
-          <h2
-            className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-2 leading-tight"
-            dangerouslySetInnerHTML={{ __html: title }}
-          />
-          {subtitle ? (
-            <p className="text-sm text-neutral-400 mb-7 leading-relaxed">
-              {subtitle}
-            </p>
-          ) : (
-            <div className="mb-7" />
-          )}
-
-          <div className="space-y-3">
-            {options.map((label) => (
-              <button
-                key={label}
-                onClick={onSelect}
-                className="group w-full flex items-center justify-between gap-3 bg-white/[0.04] hover:bg-white/[0.07] backdrop-blur-md border border-white/10 hover:border-[hsl(330_80%_70%)]/60 active:scale-[0.99] transition-all rounded-2xl px-5 py-4 text-left shadow-[0_4px_18px_rgba(0,0,0,0.18)]"
-              >
-                <span className="text-base font-semibold">{label}</span>
-                <span className="text-white/30 group-hover:text-[hsl(330_80%_70%)] group-hover:translate-x-0.5 transition-all text-lg">
-                  →
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <p className="text-[11px] text-neutral-600 mt-auto pt-8 text-center">
-          Tap whichever feels right · No wrong answers
-        </p>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Loading screen with animated percentage and stage checklist. Single
- * timestamp-based clock so the % advances smoothly across all stages.
- */
 function detectPlatform(url: string): "Fanvue" | "OnlyFans" | "her page" {
   if (/fanvue\.com/i.test(url)) return "Fanvue";
   if (/onlyfans\.com/i.test(url)) return "OnlyFans";
