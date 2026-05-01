@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { CREATORS, type Creator } from "@/data/creators";
+import { type Creator } from "@/data/creators";
 import CreatorCard from "./CreatorCard";
 import Stage from "./Stage";
 
@@ -77,7 +77,7 @@ function firePixel(event: string, params?: Record<string, unknown>) {
   fbq("trackSingle", PIXEL_ID, event, params);
 }
 
-export default function QuizFunnel() {
+export default function QuizFunnel({ creators }: { creators: Creator[] }) {
   const [step, setStep] = useState<Step>({ kind: "intro" });
   const [likes, setLikes] = useState<string[]>([]);
 
@@ -85,7 +85,7 @@ export default function QuizFunnel() {
   // liked — this is the one we'll redirect them to. If somehow likes is empty
   // we fall back to the first creator just so the strings have a name.
   const targetCreator =
-    CREATORS.find((c) => c.slug === likes[0]) ?? CREATORS[0];
+    creators.find((c) => c.slug === likes[0]) ?? creators[0];
   const questions = buildQuestions(targetCreator.name);
   const matchedStages = buildMatchedStages(targetCreator.name);
 
@@ -95,7 +95,7 @@ export default function QuizFunnel() {
     // Fire conversion events early so they have time to flush before navigation
     const firstLiked = likes[0];
     if (firstLiked) {
-      const creator = CREATORS.find((c) => c.slug === firstLiked);
+      const creator = creators.find((c) => c.slug === firstLiked);
       if (creator) {
         const payload = {
           content_name: creator.name,
@@ -118,7 +118,7 @@ export default function QuizFunnel() {
       }
     }, total);
     return () => clearTimeout(t);
-  }, [step.kind, likes, matchedStages]);
+  }, [step.kind, likes, matchedStages, creators]);
 
   function start() {
     firePixel("Lead", {
@@ -182,7 +182,9 @@ export default function QuizFunnel() {
   return (
     <Stage>
       {step.kind === "intro" && <Intro onStart={start} />}
-      {step.kind === "swiping" && <Swiping onComplete={onSwipeComplete} />}
+      {step.kind === "swiping" && (
+        <Swiping creators={creators} onComplete={onSwipeComplete} />
+      )}
       {step.kind === "match" && (
         <Match creator={targetCreator} onContinue={onMatchContinue} />
       )}
@@ -206,7 +208,9 @@ export default function QuizFunnel() {
           finalLabel="Chat ready"
         />
       )}
-      {step.kind === "results" && <Results likes={likes} />}
+      {step.kind === "results" && (
+        <Results creators={creators} likes={likes} />
+      )}
     </Stage>
   );
 }
@@ -278,8 +282,10 @@ function Intro({ onStart }: { onStart: () => void }) {
  * swiped, calls onComplete with the slugs that were liked.
  */
 function Swiping({
+  creators,
   onComplete,
 }: {
+  creators: Creator[];
   onComplete: (likedSlugs: string[]) => void;
 }) {
   const [index, setIndex] = useState(0);
@@ -303,8 +309,8 @@ function Swiping({
   const rafRef = useRef<number | null>(null);
   const likesRef = useRef<string[]>([]);
 
-  const current: Creator | undefined = CREATORS[index];
-  const next: Creator | undefined = CREATORS[index + 1];
+  const current: Creator | undefined = creators[index];
+  const next: Creator | undefined = creators[index + 1];
 
   // Snap-back uses ease-out-expo — very fast deceleration, feels tactile.
   const SNAP = "cubic-bezier(0.16, 1, 0.3, 1)";
@@ -470,7 +476,7 @@ function Swiping({
     // before the personalized quiz fires.
     window.setTimeout(() => {
       const nextIndex = index + 1;
-      if (nextIndex >= CREATORS.length) {
+      if (nextIndex >= creators.length) {
         onComplete(likesRef.current);
       } else {
         setIndex(nextIndex);
@@ -507,7 +513,7 @@ function Swiping({
           <span className="text-[11px] font-bold tracking-wider uppercase text-white/60">
             <span className="text-white">{index + 1}</span>
             <span className="text-white/30"> / </span>
-            {CREATORS.length}
+            {creators.length}
           </span>
         </div>
 
@@ -968,17 +974,23 @@ function LoadingScreen({
   );
 }
 
-function Results({ likes }: { likes: string[] }) {
+function Results({
+  creators,
+  likes,
+}: {
+  creators: Creator[];
+  likes: string[];
+}) {
   // Show liked creators first; if user skipped everyone, fall back to all.
   const ordered =
     likes.length > 0
       ? [
-          ...CREATORS.filter((c) => likes.includes(c.slug)),
-          ...CREATORS.filter((c) => !likes.includes(c.slug)),
+          ...creators.filter((c) => likes.includes(c.slug)),
+          ...creators.filter((c) => !likes.includes(c.slug)),
         ]
-      : CREATORS;
+      : creators;
 
-  const matchCount = likes.length || CREATORS.length;
+  const matchCount = likes.length || creators.length;
   const headline =
     likes.length > 0
       ? `${matchCount} ${matchCount === 1 ? "creator" : "creators"} matched with you`

@@ -1,13 +1,16 @@
 import HomepagePixel from "@/components/HomepagePixel";
 import QuizFunnel from "@/components/QuizFunnel";
+import { loadCreators } from "@/lib/creatorStore";
 
-export const revalidate = 60;
+// Always fetch fresh creators so admin edits show up immediately.
+export const dynamic = "force-dynamic";
 
-export default function Home() {
+export default async function Home() {
+  const creators = await loadCreators();
   return (
     <>
       <HomepagePixel />
-      <QuizFunnel />
+      <QuizFunnel creators={creators} />
     </>
   );
 }

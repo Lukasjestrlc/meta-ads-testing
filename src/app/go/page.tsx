@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import GoRedirect from "./GoRedirect";
-import { findCreator } from "@/data/creators";
+import { findCreatorBySlug } from "@/lib/creatorStore";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -18,7 +18,7 @@ type PageProps = {
 export default async function GoPage({ searchParams }: PageProps) {
   const sp = await searchParams;
   const slug = sp.slug ?? "";
-  const creator = findCreator(slug);
+  const creator = await findCreatorBySlug(slug);
   if (!creator) notFound();
 
   return <GoRedirect dest={creator.destUrl} />;
