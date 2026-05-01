@@ -2,12 +2,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   experimental: {
-    // Admin photo + video uploads go through a server action that takes
-    // a base64-encoded payload. Default cap is 1MB; bump to 50MB so a
-    // ~25MB raw video (≈35MB base64) fits with headroom. Photos at ≤5MB
-    // are well within this.
+    // Admin photo/video uploads ride on server actions. Vercel caps the
+    // *transport* body at 4.5MB regardless of plan, so there's no point
+    // setting Next's limit higher than that — the request would never
+    // reach us. We bump it just past Vercel's cap so Next isn't the
+    // first thing to reject when bodies approach the limit.
     serverActions: {
-      bodySizeLimit: "50mb",
+      bodySizeLimit: "5mb",
     },
   },
 };

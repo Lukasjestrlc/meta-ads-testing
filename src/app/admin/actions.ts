@@ -125,8 +125,12 @@ export type UploadResult =
   | { ok: true; url: string }
   | { ok: false; error: string };
 
-const MAX_PHOTO_BASE64_BYTES = 7 * 1024 * 1024; // ~5 MB raw file
-const MAX_VIDEO_BASE64_BYTES = 35 * 1024 * 1024; // ~25 MB raw file
+// Vercel caps the serverless function body at 4.5MB regardless of plan.
+// We accept up to ~4MB base64 (≈3MB raw) so there's room for the JSON
+// envelope around the payload. The client compresses photos before upload
+// to land well under this; videos have to come in pre-trimmed.
+const MAX_PHOTO_BASE64_BYTES = 4 * 1024 * 1024;
+const MAX_VIDEO_BASE64_BYTES = 4 * 1024 * 1024;
 
 function notConfigured(): UploadResult {
   return {
@@ -147,7 +151,11 @@ export async function uploadCreatorPhotoAction(
 
   if (!base64) return { ok: false, error: "No file data received." };
   if (base64.length > MAX_PHOTO_BASE64_BYTES) {
-    return { ok: false, error: "Photo is too large — keep it under ~5 MB." };
+    return {
+      ok: false,
+      error:
+        "Photo too large after compression. Try a smaller image (≤3 MB).",
+    };
   }
 
   try {
@@ -171,7 +179,11 @@ export async function uploadCreatorVideoAction(
 
   if (!base64) return { ok: false, error: "No file data received." };
   if (base64.length > MAX_VIDEO_BASE64_BYTES) {
-    return { ok: false, error: "Video is too large — keep it under ~25 MB." };
+    return {
+      ok: false,
+      error:
+        "Video too large for Vercel's 4.5 MB body limit. Use ≤3 MB clip or a hosted URL.",
+    };
   }
 
   try {

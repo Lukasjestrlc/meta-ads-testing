@@ -579,15 +579,23 @@ function PhotoField({
       setError("That doesn't look like an image.");
       return;
     }
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Photo too large — keep it under 5 MB.");
+    // Hard cap on the *original* file too. Even with compression there's
+    // some memory cost, and 25MB+ phone HEICs that come through as JPEG
+    // can cause real slowness on lower-end devices.
+    if (file.size > 30 * 1024 * 1024) {
+      setError("Photo is huge — try one under 30 MB.");
       return;
     }
 
     setUploading(true);
     try {
-      const base64 = await fileToBase64(file);
-      const res = await uploadCreatorPhotoAction(slug, file.name, base64);
+      // Always compress in the browser. A 1600px JPEG @ 0.86 quality is
+      // ~200–500KB, which fits Vercel's 4.5MB body cap with room to spare
+      // and keeps the repo from ballooning with full-res phone photos.
+      const compressed = await compressImage(file);
+      const filename = file.name.replace(/\.[^.]+$/, "") + ".jpg";
+      const base64 = await fileToBase64(compressed);
+      const res = await uploadCreatorPhotoAction(slug, filename, base64);
       if (res.ok) {
         onChange(res.url);
       } else {
@@ -674,8 +682,14 @@ function VideoField({
       setError("That doesn't look like a video.");
       return;
     }
-    if (file.size > 25 * 1024 * 1024) {
-      setError("Video too large — keep it under 25 MB.");
+    // Vercel caps serverless function bodies at 4.5MB regardless of plan,
+    // and videos can't be compressed in the browser the way photos can.
+    // 3MB raw is the practical ceiling — a few seconds of mp4. For longer
+    // clips, paste a CDN URL into the field below.
+    if (file.size > 3 * 1024 * 1024) {
+      setError(
+        "Video too large for direct upload — use ≤3 MB clip, or paste a hosted URL."
+      );
       return;
     }
 
@@ -738,14 +752,15 @@ function VideoField({
         <p className="text-xs text-red-400">{error}</p>
       ) : (
         <p className="text-[10px] text-neutral-500">
-          MP4 / WebM / MOV, ≤25 MB. Plays muted on the swipe card if set.
+          MP4 / WebM / MOV, ≤3 MB direct upload (Vercel body limit). Paste
+          a CDN URL for longer clips. Plays muted on the swipe card if set.
         </p>
       )}
     </div>
   );
 }
 
-function fileToBase64(file: File): Promise<string> {
+function fileToBase64(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -757,6 +772,62 @@ function fileToBase64(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error("read failed"));
     reader.readAsDataURL(file);
   });
+}
+
+function loadImageElement(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(img);
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not decode image"));
+    };
+    img.src = url;
+  });
+}
+
+/**
+ * Resizes + recompresses photos in the browser before they hit the server.
+ * Vercel caps serverless function bodies at 4.5MB regardless of plan, so
+ * a raw 8MB phone photo (≈11MB base64) blows the limit and the upload
+ * action blows up as a generic "Server Components render" error.
+ *
+ * 1600px max dimension at 0.86 JPEG quality is visually indistinguishable
+ * from a phone original on any screen we'll show it on, and lands a
+ * typical photo at 200–500KB.
+ */
+async function compressImage(
+  file: File,
+  maxDim = 1600,
+  quality = 0.86
+): Promise<Blob> {
+  // GIFs would lose their animation through canvas — pass them through.
+  if (file.type === "image/gif") return file;
+
+  const img = await loadImageElement(file);
+  let w = img.naturalWidth;
+  let h = img.naturalHeight;
+  if (Math.max(w, h) > maxDim) {
+    const scale = maxDim / Math.max(w, h);
+    w = Math.round(w * scale);
+    h = Math.round(h * scale);
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = w;
+  canvas.height = h;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return file;
+  ctx.drawImage(img, 0, 0, w, h);
+  const blob = await new Promise<Blob | null>((r) =>
+    canvas.toBlob(r, "image/jpeg", quality)
+  );
+  // If something goes wrong with toBlob, fall back to the original file —
+  // server-side limits will still catch a too-large payload.
+  return blob && blob.size < file.size ? blob : file;
 }
 
 function PhotoPreview({ url }: { url: string | null }) {
