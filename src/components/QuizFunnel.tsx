@@ -12,13 +12,16 @@ type Step =
   | { kind: "swiping" }
   | { kind: "match" }
   | { kind: "question"; index: number }
+  | { kind: "prep" }
   | { kind: "matchedLoading" }
   | { kind: "results" };
 
-// Questions are framed as her getting to know him before they actually start
-// chatting — so it feels like setting up a real conversation, not filling
-// out a survey. The arc is: vibe → content prefs → timing → message style →
-// pick the actual opener (commitment moment).
+// Questions are framed as her getting to know him before they start chatting,
+// so it feels like setting up a real conversation rather than a survey. The
+// arc is: vibe → content prefs → timing → message style. The opener-pick
+// step that used to live here was misleading (no chat input on the next
+// page), so it was replaced with the Prep screen that explicitly sets up
+// account-creation expectations on Fanvue.
 function buildQuestions(name: string) {
   return [
     {
@@ -56,23 +59,13 @@ function buildQuestions(name: string) {
         "Mysterious — a little chase",
       ],
     },
-    {
-      title: `Last thing — your first line to ${name}`,
-      subtitle: "Tap the one that feels you.",
-      options: [
-        `Hey ${name} — couldn't scroll past you`,
-        "I love your vibe, tell me about yourself",
-        "You'll have to surprise me 😉",
-        "Pick the perfect line for me",
-      ],
-    },
   ];
 }
 
 function buildMatchedStages(name: string) {
   return [
     { label: `Letting ${name} know you're on your way…`, duration: 900 },
-    { label: "Saving your opener…", duration: 1100 },
+    { label: "Saving your chat preferences…", duration: 1100 },
     { label: `Opening chat with ${name}…`, duration: 800 },
   ];
 }
@@ -171,8 +164,19 @@ export default function QuizFunnel() {
         content_name: "quiz_complete",
         content_category: "creator_match",
       });
-      setStep({ kind: "matchedLoading" });
+      // Prep screen sets account-creation expectations before the redirect
+      // — Fanvue requires signup, and the visitor bounces from cold paywalls
+      // unless they're warmed up to the idea first.
+      setStep({ kind: "prep" });
     }
+  }
+
+  function onPrepContinue() {
+    firePixel("Lead", {
+      content_name: "prep_continue",
+      content_category: "creator_match",
+    });
+    setStep({ kind: "matchedLoading" });
   }
 
   return (
@@ -192,6 +196,9 @@ export default function QuizFunnel() {
           options={questions[step.index].options}
           onSelect={answer}
         />
+      )}
+      {step.kind === "prep" && (
+        <Prep creator={targetCreator} onContinue={onPrepContinue} />
       )}
       {step.kind === "matchedLoading" && (
         <LoadingScreen
@@ -782,6 +789,98 @@ function Question({
  * Loading screen with animated percentage and stage checklist. Single
  * timestamp-based clock so the % advances smoothly across all stages.
  */
+function detectPlatform(url: string): "Fanvue" | "OnlyFans" | "her page" {
+  if (/fanvue\.com/i.test(url)) return "Fanvue";
+  if (/onlyfans\.com/i.test(url)) return "OnlyFans";
+  return "her page";
+}
+
+/**
+ * Step that sits between the quiz and the redirect. Names the destination
+ * platform explicitly and pre-frames account creation so visitors don't
+ * bounce when they hit Fanvue's signup wall. Conversion-wise this is the
+ * highest-friction moment — be specific about what's on the other side.
+ */
+function Prep({
+  creator,
+  onContinue,
+}: {
+  creator: Creator;
+  onContinue: () => void;
+}) {
+  const platform = detectPlatform(creator.destUrl);
+  return (
+    <div className="min-h-screen flex flex-col px-5 py-7">
+      <div className="max-w-md w-full mx-auto flex-1 flex flex-col">
+        <div className="flex items-center justify-between mb-6">
+          <BrandHeader subtle />
+          <span className="text-[11px] font-bold tracking-wider uppercase text-white/60">
+            Almost there
+          </span>
+        </div>
+
+        <div className="animate-[fadeIn_400ms_ease-out] space-y-7 flex-1 flex flex-col">
+          <div className="space-y-2">
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">
+              Ready to message {creator.name}
+            </h2>
+            <p className="text-sm text-neutral-400 leading-relaxed">
+              She&apos;s on {platform}. Here&apos;s what happens next:
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <PrepStep number={1} title="Free signup if you're new">
+              Just an email — takes about 30 seconds. No card required to
+              create your account.
+            </PrepStep>
+            <PrepStep number={2} title={`Land on ${creator.name}'s page`}>
+              Your style and chat preferences are saved and waiting.
+            </PrepStep>
+            <PrepStep number={3} title="Start the conversation">
+              Send her your first message — she&apos;s online now.
+            </PrepStep>
+          </div>
+
+          <div className="space-y-2 mt-auto">
+            <button
+              onClick={onContinue}
+              className="w-full bg-gradient-pink text-white font-bold py-4 rounded-full text-base shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] hover:shadow-[0_12px_36px_-4px_rgba(240,117,179,0.8)] active:scale-[0.98] transition-all"
+            >
+              Continue to {platform} →
+            </button>
+            <p className="text-[11px] text-neutral-500 text-center">
+              Free to join · 18+ only · Independent creator
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PrepStep({
+  number,
+  title,
+  children,
+}: {
+  number: number;
+  title: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-start gap-3 bg-white/[0.04] border border-white/10 rounded-2xl p-4 backdrop-blur-md">
+      <span className="flex-shrink-0 w-7 h-7 rounded-full bg-[hsl(330_80%_70%)] text-white text-sm font-bold grid place-items-center mt-0.5">
+        {number}
+      </span>
+      <div className="flex-1">
+        <h3 className="text-sm font-bold mb-0.5">{title}</h3>
+        <p className="text-xs text-neutral-400 leading-relaxed">{children}</p>
+      </div>
+    </div>
+  );
+}
+
 function LoadingScreen({
   stages,
   finalLabel,
