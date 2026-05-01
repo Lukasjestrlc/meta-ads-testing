@@ -10,37 +10,55 @@ const PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 type Step =
   | { kind: "intro" }
   | { kind: "swiping" }
+  | { kind: "match" }
   | { kind: "question"; index: number }
   | { kind: "matchedLoading" }
   | { kind: "results" };
 
-// Quiz is shaped around commitment escalation: small early "yes," personal
-// detail in the middle, opener-pick at the end (commits the user to a
-// specific message they'll feel pressure to actually send when they land).
+// Questions are framed as her getting to know him before they actually start
+// chatting — so it feels like setting up a real conversation, not filling
+// out a survey. The arc is: vibe → content prefs → timing → message style →
+// pick the actual opener (commitment moment).
 function buildQuestions(name: string) {
   return [
     {
-      title: `${name} liked you back 💗`,
-      subtitle: "Quick — what's your conversation style?",
-      options: ["Sweet & playful", "Flirty & bold", "Funny & casual", "Quiet & deep"],
-    },
-    {
-      title: "When are you usually free to chat?",
-      subtitle: `${name} will know when to expect you.`,
-      options: ["Mornings", "Afternoons", "Evenings", "Late night"],
-    },
-    {
-      title: "What gets you in the mood to message?",
+      title: "Quick — what's your vibe?",
+      subtitle: `${name} likes to match her energy to who she's chatting with.`,
       options: [
-        "Real conversations",
-        "Spicy banter",
-        "Sweet compliments",
-        "Spontaneous flirting",
+        "Sweet & playful",
+        "Flirty & bold",
+        "Funny & casual",
+        "Quiet & deep",
       ],
     },
     {
-      title: `Last one — pick your opener for ${name}`,
-      subtitle: "First impressions matter. Tap the one that feels right.",
+      title: "What kind of content do you enjoy most?",
+      subtitle: "She'll prioritize this in your DMs.",
+      options: [
+        "Selfies & photos",
+        "Behind-the-scenes videos",
+        "Voice notes",
+        "A mix of everything",
+      ],
+    },
+    {
+      title: "When are you usually in the mood to chat?",
+      subtitle: `${name} will know when to send.`,
+      options: ["Mornings", "Afternoons", "Evenings", "Late at night"],
+    },
+    {
+      title: "How do you usually message someone new?",
+      subtitle: "No wrong answer — she just wants to match your energy.",
+      options: [
+        "Confident — I make the first move",
+        "Easy-going — let it flow",
+        "Shy at first — warm up fast",
+        "Mysterious — a little chase",
+      ],
+    },
+    {
+      title: `Last thing — your first line to ${name}`,
+      subtitle: "Tap the one that feels you.",
       options: [
         `Hey ${name} — couldn't scroll past you`,
         "I love your vibe, tell me about yourself",
@@ -125,12 +143,22 @@ export default function QuizFunnel() {
       num_liked: likedSlugs.length,
     });
     if (likedSlugs.length > 0) {
-      // They liked at least one — run the personalized quiz before redirect.
-      setStep({ kind: "question", index: 0 });
+      // Tinder-style match celebration first, then the personalized chat-prep
+      // quiz. The match screen does the heavy lifting on reciprocity framing
+      // ("she liked you too"), so the quiz can stay focused on screening.
+      setStep({ kind: "match" });
     } else {
       // Skipped everyone — show the grid so they can still pick one
       setStep({ kind: "results" });
     }
+  }
+
+  function onMatchContinue() {
+    firePixel("Lead", {
+      content_name: "match_continue",
+      content_category: "creator_match",
+    });
+    setStep({ kind: "question", index: 0 });
   }
 
   function answer() {
@@ -151,6 +179,9 @@ export default function QuizFunnel() {
     <Stage>
       {step.kind === "intro" && <Intro onStart={start} />}
       {step.kind === "swiping" && <Swiping onComplete={onSwipeComplete} />}
+      {step.kind === "match" && (
+        <Match creator={targetCreator} onContinue={onMatchContinue} />
+      )}
       {step.kind === "question" && (
         <Question
           key={step.index}
@@ -601,6 +632,74 @@ function Swiping({
             ♥
           </button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Tinder-style "It's a match!" celebration. Sits between the swipe deck and
+ * the chat-prep quiz to make the funnel feel like meeting an actual person —
+ * reciprocity ("she liked you back") + a tactile gear shift from browsing
+ * to engaging.
+ */
+function Match({
+  creator,
+  onContinue,
+}: {
+  creator: Creator;
+  onContinue: () => void;
+}) {
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10">
+      <div className="max-w-sm w-full text-center space-y-7 animate-[fadeIn_500ms_ease-out]">
+        <div className="flex justify-center">
+          <BrandHeader subtle />
+        </div>
+
+        <div className="space-y-3">
+          <div className="text-6xl animate-[fadeIn_600ms_ease-out]">💗</div>
+          <h1 className="text-5xl font-extrabold tracking-tight bg-gradient-to-r from-[hsl(330_80%_75%)] via-[hsl(355_85%_75%)] to-[hsl(20_90%_70%)] bg-clip-text text-transparent">
+            It&apos;s a match!
+          </h1>
+          <p className="text-base text-white/85">
+            <span className="font-bold">{creator.name}</span> liked you back
+          </p>
+        </div>
+
+        <div className="flex justify-center">
+          <div className="relative w-36 h-36 rounded-full overflow-hidden ring-4 ring-[hsl(330_80%_70%)]/40 shadow-[0_0_60px_-10px_rgba(240,117,179,0.6)]">
+            {creator.photo ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={creator.photo}
+                alt={creator.name}
+                className="absolute inset-0 w-full h-full object-cover"
+                draggable={false}
+              />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-neutral-700 to-neutral-900" />
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <p className="text-sm text-neutral-300 leading-relaxed px-2">
+            She&apos;s online now. A couple quick things so she knows what
+            you&apos;re into before you message her.
+          </p>
+          <div className="inline-flex items-center gap-1.5 mt-2 text-[11px] text-[#4ade80]">
+            <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+            takes less than 30 seconds
+          </div>
+        </div>
+
+        <button
+          onClick={onContinue}
+          className="w-full bg-gradient-pink text-white font-bold py-4 rounded-full text-base shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] hover:shadow-[0_12px_36px_-4px_rgba(240,117,179,0.8)] active:scale-[0.98] transition-all"
+        >
+          Set up my chat →
+        </button>
       </div>
     </div>
   );
