@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import type { Creator } from "@/data/creators";
 import {
   logoutAction,
   resetToSeedAction,
   saveCreatorsAction,
+  uploadCreatorPhotoAction,
 } from "./actions";
 
 type Draft = Creator & { _id: string };
@@ -380,12 +381,11 @@ function CreatorEditor({
             />
           </Field>
 
-          <Field label="Photo URL">
-            <input
-              value={draft.photo ?? ""}
-              onChange={(e) => onChange({ photo: e.target.value || null })}
-              className={inputClass}
-              placeholder="https://images.unsplash.com/…"
+          <Field label="Photo">
+            <PhotoField
+              slug={draft.slug}
+              value={draft.photo}
+              onChange={(photo) => onChange({ photo })}
             />
           </Field>
 
@@ -444,6 +444,115 @@ function Field({
       {children}
     </label>
   );
+}
+
+function PhotoField({
+  slug,
+  value,
+  onChange,
+}: {
+  slug: string;
+  value: string | null;
+  onChange: (url: string | null) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function pickFile(file: File) {
+    setError(null);
+    if (!slug.trim()) {
+      setError("Set the slug first — uploads are saved as <slug>.<ext>.");
+      return;
+    }
+    if (!file.type.startsWith("image/")) {
+      setError("That doesn't look like an image.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Photo too large — keep it under 5 MB.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const res = await uploadCreatorPhotoAction(slug, file.name, base64);
+      if (res.ok) {
+        onChange(res.url);
+      } else {
+        setError(res.error);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="bg-white/[0.06] border border-white/15 rounded-xl px-3 py-2 text-sm font-bold hover:bg-white/[0.1] active:scale-95 transition-all disabled:opacity-50"
+        >
+          {uploading ? "Uploading…" : value ? "Replace photo" : "Upload photo"}
+        </button>
+        {value ? (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            disabled={uploading}
+            className="text-xs text-neutral-400 hover:text-red-400 transition-colors disabled:opacity-50"
+          >
+            Remove
+          </button>
+        ) : null}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) pickFile(file);
+          }}
+        />
+      </div>
+      <input
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+        className={inputClass}
+        placeholder="…or paste a photo URL"
+      />
+      {error ? (
+        <p className="text-xs text-red-400">{error}</p>
+      ) : (
+        <p className="text-[10px] text-neutral-500">
+          Uploads commit to <span className="font-mono">public/creators/</span>{" "}
+          and live within ~30–60s of saving.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // result is "data:<mime>;base64,<payload>" — strip the data URL prefix.
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+    reader.readAsDataURL(file);
+  });
 }
 
 function PhotoPreview({ url }: { url: string | null }) {

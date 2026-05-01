@@ -12,6 +12,7 @@ import {
 import {
   isStoreConfigured,
   loadCreators,
+  savePhoto,
   saveCreators,
 } from "@/lib/creatorStore";
 import type { Creator } from "@/data/creators";
@@ -117,6 +118,44 @@ export async function resetToSeedAction(): Promise<SaveResult> {
 export async function getCreatorsForAdmin(): Promise<Creator[]> {
   await requireAdmin();
   return loadCreators();
+}
+
+export type UploadResult =
+  | { ok: true; url: string }
+  | { ok: false; error: string };
+
+const MAX_PHOTO_BASE64_BYTES = 7 * 1024 * 1024; // ~5 MB raw file
+
+export async function uploadCreatorPhotoAction(
+  slug: string,
+  filename: string,
+  base64: string
+): Promise<UploadResult> {
+  await requireAdmin();
+
+  if (!isStoreConfigured()) {
+    return {
+      ok: false,
+      error:
+        "GitHub commits aren't configured. Set GITHUB_TOKEN and GITHUB_REPO " +
+        "in Vercel env vars and redeploy.",
+    };
+  }
+
+  if (!base64) return { ok: false, error: "No file data received." };
+  if (base64.length > MAX_PHOTO_BASE64_BYTES) {
+    return { ok: false, error: "Photo is too large — keep it under ~5 MB." };
+  }
+
+  try {
+    const url = await savePhoto(slug, filename, base64);
+    return { ok: true, url };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Upload failed.",
+    };
+  }
 }
 
 function normalizeCreator(c: Creator): Creator {
