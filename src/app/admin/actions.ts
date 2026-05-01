@@ -2,7 +2,6 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { revalidatePath } from "next/cache";
 import {
   ADMIN_COOKIE,
   SESSION_MAX_AGE_SECONDS,
@@ -68,13 +67,14 @@ export async function saveCreatorsAction(
     return {
       ok: false,
       error:
-        "Vercel KV isn't connected. In Vercel → Storage → connect Upstash " +
-        "Redis, redeploy, and try again.",
+        "GitHub commits aren't configured. Set GITHUB_TOKEN (PAT with " +
+        'Contents: Write) and GITHUB_REPO ("owner/name") in Vercel env ' +
+        "vars, then redeploy.",
     };
   }
 
-  // Sanity check the payload before writing — KV is the live source for the
-  // public site, so a typo here would break it.
+  // Sanity check the payload before writing — once committed to git, the
+  // public site rebuilds against this data, so a typo here would break it.
   const cleaned = creators.map((c) => normalizeCreator(c));
   const slugs = new Set<string>();
   for (const c of cleaned) {
@@ -102,10 +102,9 @@ export async function saveCreatorsAction(
     };
   }
 
-  // Bust the cache for pages that consume the store.
-  revalidatePath("/");
-  revalidatePath("/go");
-  revalidatePath("/admin");
+  // The commit triggers a Vercel rebuild that picks up data/creators.json.
+  // No need to revalidatePath — the file on disk for the *current*
+  // deployment hasn't changed; only the next deployment has the new data.
   return { ok: true };
 }
 

@@ -11,6 +11,8 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
   const creators = await loadCreators();
-  const kvConnected = isStoreConfigured();
-  return <AdminClient initial={creators} kvConnected={kvConnected} />;
+  const storeConfigured = isStoreConfigured();
+  return (
+    <AdminClient initial={creators} storeConfigured={storeConfigured} />
+  );
 }

@@ -38,10 +38,10 @@ function blankCreator(): Draft {
 
 export default function AdminClient({
   initial,
-  kvConnected,
+  storeConfigured,
 }: {
   initial: Creator[];
-  kvConnected: boolean;
+  storeConfigured: boolean;
 }) {
   const [drafts, setDrafts] = useState<Draft[]>(() => initial.map(toDraft));
   const [feedback, setFeedback] = useState<{
@@ -84,7 +84,10 @@ export default function AdminClient({
       const res = await saveCreatorsAction(payload);
       setFeedback(
         res.ok
-          ? { kind: "ok", msg: "Saved. Live site updates within seconds." }
+          ? {
+              kind: "ok",
+              msg: "Committed. Vercel rebuilds in ~30–60s, then the live site shows the new list.",
+            }
           : { kind: "err", msg: res.error }
       );
     });
@@ -141,17 +144,18 @@ export default function AdminClient({
       </header>
 
       <div className="max-w-4xl mx-auto px-5 py-7 space-y-6">
-        {!kvConnected && (
+        {!storeConfigured && (
           <div className="rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm text-amber-200 leading-relaxed">
             <strong className="block font-bold mb-1">
-              Vercel KV isn&apos;t connected
+              GitHub commits aren&apos;t configured
             </strong>
-            The site is currently rendering the seed list baked into the repo.
-            Saves will fail. Connect Upstash Redis from{" "}
+            Saves will fail until you set{" "}
+            <span className="font-mono text-xs">GITHUB_TOKEN</span> (PAT with
+            Contents: Write) and{" "}
             <span className="font-mono text-xs">
-              Vercel → Storage → Add Database
-            </span>
-            , then redeploy.
+              GITHUB_REPO=&quot;owner/name&quot;
+            </span>{" "}
+            in Vercel → Settings → Environment Variables, then redeploy.
           </div>
         )}
 
