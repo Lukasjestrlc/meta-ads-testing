@@ -4,6 +4,15 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { type Creator, pickActivity } from "@/data/creators";
 import CreatorCard from "./CreatorCard";
 import Stage from "./Stage";
+import {
+  AlertIcon,
+  BoltIcon,
+  CheckIcon,
+  ClockIcon,
+  FlameIcon,
+  HeartIcon,
+  SparkleIcon,
+} from "./icons";
 
 const PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 
@@ -209,15 +218,27 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
 
 // ─────────────────────── shared elements ───────────────────────
 
+/**
+ * Brand wordmark. The previous version tagged a pulsing green dot onto
+ * every screen, which drowned out the green dots that actually mean
+ * something (live counter, online status). New mark is a small magenta
+ * cross-glyph paired with the wordmark — distinctive without competing
+ * with live indicators.
+ */
 function BrandHeader({ subtle = false }: { subtle?: boolean }) {
   return (
     <div
-      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.06] border border-white/10 backdrop-blur-md ${
+      className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/10 backdrop-blur-md ${
         subtle ? "" : "shadow-[0_4px_18px_rgba(0,0,0,0.25)]"
       }`}
     >
-      <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
-      <span className="text-[11px] uppercase tracking-[0.2em] font-bold text-white/85">
+      <span
+        aria-hidden
+        className="text-[hsl(330_80%_72%)] text-[10px] leading-none -mt-px"
+      >
+        ✦
+      </span>
+      <span className="text-[11px] uppercase tracking-[0.22em] font-bold text-white/90">
         peach club
       </span>
     </div>
@@ -246,15 +267,14 @@ function Intro({
       }}
     >
       <div className="max-w-md w-full text-center space-y-5 animate-[fadeIn_500ms_ease-out]">
-        <div className="flex flex-col items-center gap-2">
-          <BrandHeader />
-          <LiveCounter />
-        </div>
+        <BrandHeader />
 
-        <h1 className="text-[2rem] sm:text-[2.75rem] font-extrabold tracking-tight leading-[1.05]">
-          Find creators that{" "}
-          <span className="bg-gradient-to-r from-[hsl(330_80%_75%)] via-[hsl(355_85%_75%)] to-[hsl(20_90%_70%)] bg-clip-text text-transparent">
-            match your vibe
+        <h1 className="font-extrabold tracking-[-0.02em] leading-[0.95]">
+          <span className="block text-[2rem] sm:text-[2.5rem] text-white/55 font-medium">
+            Find creators
+          </span>
+          <span className="block text-[2.4rem] sm:text-[3rem] bg-gradient-to-br from-white via-[hsl(330_80%_88%)] to-[hsl(20_90%_82%)] bg-clip-text text-transparent">
+            that match your vibe
           </span>
         </h1>
 
@@ -264,11 +284,16 @@ function Intro({
 
         <button
           onClick={onStart}
-          className="w-full bg-gradient-pink text-white font-bold py-4 rounded-full text-base shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] hover:shadow-[0_12px_36px_-4px_rgba(240,117,179,0.8)] active:scale-[0.98] transition-all"
+          className="w-full bg-gradient-pink text-white font-bold py-4 rounded-full text-base tracking-tight shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] hover:shadow-[0_12px_36px_-4px_rgba(240,117,179,0.8)] active:scale-[0.98] transition-all"
           style={{ touchAction: "manipulation" }}
         >
-          Start swiping → free trial
+          Start swiping
+          <span className="text-white/70 font-medium ml-2">
+            · free trial
+          </span>
         </button>
+
+        <LiveCounter />
 
         <ActivityTicker creators={creators} />
 
@@ -416,7 +441,13 @@ function ActivityTicker({ creators }: { creators: Creator[] }) {
         key={msg}
         className="inline-flex items-center gap-1.5 text-[11px] text-white/65 animate-[fadeIn_400ms_ease-out]"
       >
-        <span className="text-[hsl(330_80%_70%)]">💗</span>
+        <HeartIcon
+          className="text-[hsl(330_80%_72%)]"
+          width={11}
+          height={11}
+          fill="currentColor"
+          stroke="none"
+        />
         {msg}
       </div>
     </div>
@@ -451,10 +482,16 @@ function LiveCounter() {
   }, []);
 
   return (
-    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#4ade80]/10 border border-[#4ade80]/30 text-[10px] uppercase tracking-[0.18em] font-bold text-[#4ade80] tabular-nums">
-      <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
-      {count === null ? "—" : count.toLocaleString()} chatting now
-    </div>
+    <p className="text-sm text-white/55 tabular-nums">
+      <span className="relative inline-flex w-1.5 h-1.5 mr-2 align-middle">
+        <span className="absolute inset-0 rounded-full bg-[#4ade80] opacity-70 animate-ping" />
+        <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-[#4ade80]" />
+      </span>
+      <span className="text-white/85 font-bold">
+        {count === null ? "—" : count.toLocaleString()}
+      </span>{" "}
+      chatting right now
+    </p>
   );
 }
 
@@ -810,8 +847,9 @@ function Swiping({
                   {pickActivity(current.activity)}
                 </span>
                 <span className="text-white/30">·</span>
-                <span className="text-amber-300">
-                  🔥 {slotsLeftFor(current.slug)} free trial slots left
+                <span className="inline-flex items-center gap-1 text-amber-300">
+                  <FlameIcon width={11} height={11} />
+                  {slotsLeftFor(current.slug)} free trial slots left
                 </span>
               </div>
             </div>
@@ -999,9 +1037,14 @@ function Wheel({
             })}
           </div>
 
-          {/* Center hub */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white shadow-[0_4px_18px_rgba(0,0,0,0.5)] grid place-items-center text-xl pointer-events-none">
-            🎁
+          {/* Center hub — solid mark instead of gift emoji */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white shadow-[0_4px_18px_rgba(0,0,0,0.5)] grid place-items-center pointer-events-none">
+            <SparkleIcon
+              className="text-[hsl(330_80%_45%)]"
+              width={20}
+              height={20}
+              strokeWidth={2.4}
+            />
           </div>
         </div>
 
@@ -1037,7 +1080,9 @@ function WheelResult({
     <div className="relative space-y-4 animate-[fadeIn_500ms_ease-out]">
       <ConfettiBurst />
       <div className="rounded-2xl border border-[#4ade80]/40 bg-[#4ade80]/10 p-5 space-y-2">
-        <div className="text-2xl">🎉</div>
+        <div className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-[#4ade80] text-black">
+          <CheckIcon width={20} height={20} strokeWidth={3} />
+        </div>
         <p className="text-base font-bold">
           Free trial unlocked with{" "}
           <span className="text-[#4ade80]">{creator.name}</span>
@@ -1136,7 +1181,17 @@ function Match({
         </div>
 
         <div className="space-y-3">
-          <div className="text-6xl animate-[fadeIn_600ms_ease-out]">💗</div>
+          <div className="flex justify-center animate-[fadeIn_600ms_ease-out]">
+            <div className="w-16 h-16 rounded-full bg-gradient-pink grid place-items-center shadow-[0_8px_28px_-4px_rgba(240,117,179,0.7)]">
+              <HeartIcon
+                className="text-white"
+                width={32}
+                height={32}
+                fill="currentColor"
+                stroke="none"
+              />
+            </div>
+          </div>
           <h1 className="text-5xl font-extrabold tracking-tight bg-gradient-to-r from-[hsl(330_80%_75%)] via-[hsl(355_85%_75%)] to-[hsl(20_90%_70%)] bg-clip-text text-transparent">
             It&apos;s a match!
           </h1>
@@ -1334,8 +1389,12 @@ function FreeTrialCountdown() {
 
   if (seconds <= 0) {
     return (
-      <div className="flex items-center gap-2.5 rounded-2xl border border-red-500/40 bg-red-500/10 p-3.5">
-        <span className="text-lg">⚠</span>
+      <div className="flex items-center gap-3 rounded-2xl border border-red-500/40 bg-red-500/10 p-3.5">
+        <AlertIcon
+          className="text-red-300 flex-shrink-0"
+          width={20}
+          height={20}
+        />
         <p className="text-sm text-red-300 font-bold">
           Last chance — your free trial slot is closing.
         </p>
@@ -1346,10 +1405,14 @@ function FreeTrialCountdown() {
   const m = Math.floor(seconds / 60);
   const s = seconds % 60;
   return (
-    <div className="flex items-center gap-2.5 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5">
-      <span className="text-lg">⏰</span>
+    <div className="flex items-center gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5">
+      <ClockIcon
+        className="text-amber-300 flex-shrink-0"
+        width={20}
+        height={20}
+      />
       <p className="text-sm leading-snug">
-        <span className="text-amber-300 font-bold">
+        <span className="text-amber-300 font-bold tabular-nums">
           Free trial expires in {m}:{s.toString().padStart(2, "0")}
         </span>
         <span className="block text-[11px] text-amber-200/80 mt-0.5">

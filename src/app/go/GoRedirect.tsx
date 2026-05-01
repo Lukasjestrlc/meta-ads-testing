@@ -111,7 +111,23 @@ function IOSEscapeScreen({
     <main className="min-h-dvh flex flex-col items-center justify-center bg-[hsl(0_0%_4%)] text-white p-6">
       <div className="max-w-sm w-full text-center space-y-7">
         <div className="space-y-3">
-          <div className="text-5xl">🌐</div>
+          <div className="inline-flex w-12 h-12 rounded-full bg-white/[0.06] border border-white/10 items-center justify-center">
+            <svg
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+              className="text-white/85"
+            >
+              <circle cx="12" cy="12" r="9" />
+              <path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" />
+            </svg>
+          </div>
           <h1 className="text-2xl font-bold tracking-tight">
             One last step
           </h1>
