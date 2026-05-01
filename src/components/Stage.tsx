@@ -30,14 +30,13 @@ export default function Stage({
     <main className="relative min-h-screen overflow-hidden bg-[hsl(0_0%_4%)] text-white">
       {photos.length > 0 && <PhotoMosaic photos={photos} />}
 
-      {/* Brand color tint — multiplied. Lighter than the previous pass so
-          faces in the mosaic stay visible instead of getting crushed. */}
+      {/* Brand color tint — soft multiply, low opacity so faces dominate. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10"
         style={{
           background:
-            "linear-gradient(135deg, hsl(330 80% 35% / 0.4) 0%, hsl(355 75% 25% / 0.35) 50%, hsl(20 85% 35% / 0.4) 100%)",
+            "linear-gradient(135deg, hsl(330 80% 50% / 0.22) 0%, hsl(355 75% 50% / 0.18) 50%, hsl(20 85% 50% / 0.22) 100%)",
           mixBlendMode: "multiply",
         }}
       />
@@ -86,14 +85,15 @@ export default function Stage({
         }}
       />
 
-      {/* Vignette — soft at center so foreground content is fully readable,
-          dark at edges to hide grid seams + draw focus inward */}
+      {/* Vignette — generous transparent middle so the photo wall stays
+          legible across most of the viewport; gentle dark only at the
+          extreme edges to hide grid seams. */}
       <div
         aria-hidden
         className="pointer-events-none absolute inset-0 -z-10"
         style={{
           background:
-            "radial-gradient(ellipse at center, transparent 25%, hsl(0 0% 0% / 0.5) 75%, hsl(0 0% 0% / 0.85) 100%)",
+            "radial-gradient(ellipse at center, transparent 50%, hsl(0 0% 0% / 0.25) 80%, hsl(0 0% 0% / 0.55) 100%)",
         }}
       />
 
@@ -137,7 +137,7 @@ function PhotoMosaic({ photos }: { photos: string[] }) {
             className="absolute inset-0 w-full h-full object-cover"
             style={{
               objectPosition: "center 30%", // bias toward faces
-              filter: "brightness(0.55) saturate(0.95) contrast(1.05)",
+              filter: "brightness(0.78) saturate(1.05) contrast(1.05)",
               animation: `kenburns ${22 + (i % 5) * 3}s ease-in-out infinite alternate`,
               // Stagger so tiles never move in sync. Negative delays start
               // each tile mid-animation, so there's no synchronized "kick"
