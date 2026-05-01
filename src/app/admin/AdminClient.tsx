@@ -1,12 +1,13 @@
 "use client";
 
 import { useRef, useState, useTransition } from "react";
-import type { Creator } from "@/data/creators";
+import { ACTIVITY_OPTIONS, type Creator } from "@/data/creators";
 import {
   logoutAction,
   resetToSeedAction,
   saveCreatorsAction,
   uploadCreatorPhotoAction,
+  uploadCreatorVideoAction,
 } from "./actions";
 
 type Draft = Creator & { _id: string };
@@ -20,20 +21,26 @@ function toDraft(c: Creator): Draft {
   return { ...c, _id: newDraftId() };
 }
 
+function randomSlug(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let s = "";
+  for (let i = 0; i < 8; i++) {
+    s += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return s;
+}
+
 function blankCreator(): Draft {
   return {
     _id: newDraftId(),
-    slug: `creator-${Math.random().toString(36).slice(2, 7)}`,
+    slug: randomSlug(),
     name: "",
     age: 21,
-    city: "",
     bio: "",
-    match: 90,
-    tags: [],
     photo: null,
     video: null,
     destUrl: "",
-    activity: "active today",
+    activity: "", // empty = render-time random
   };
 }
 
@@ -303,14 +310,6 @@ function CreatorEditor({
 
         <div className="space-y-3 min-w-0">
           <Row>
-            <Field label="Slug (URL id)">
-              <input
-                value={draft.slug}
-                onChange={(e) => onChange({ slug: e.target.value })}
-                className={inputClass}
-                placeholder="kylie-1"
-              />
-            </Field>
             <Field label="Name">
               <input
                 value={draft.name}
@@ -319,9 +318,6 @@ function CreatorEditor({
                 placeholder="Kylie"
               />
             </Field>
-          </Row>
-
-          <Row>
             <Field label="Age">
               <input
                 type="number"
@@ -329,26 +325,6 @@ function CreatorEditor({
                 value={draft.age}
                 onChange={(e) =>
                   onChange({ age: Number(e.target.value) || 18 })
-                }
-                className={inputClass}
-              />
-            </Field>
-            <Field label="City">
-              <input
-                value={draft.city}
-                onChange={(e) => onChange({ city: e.target.value })}
-                className={inputClass}
-                placeholder="Los Angeles"
-              />
-            </Field>
-            <Field label="Match score (0–100)">
-              <input
-                type="number"
-                min={0}
-                max={100}
-                value={draft.match}
-                onChange={(e) =>
-                  onChange({ match: Number(e.target.value) || 0 })
                 }
                 className={inputClass}
               />
@@ -365,22 +341,6 @@ function CreatorEditor({
             />
           </Field>
 
-          <Field label="Tags (comma separated, max 8)">
-            <input
-              value={draft.tags.join(", ")}
-              onChange={(e) =>
-                onChange({
-                  tags: e.target.value
-                    .split(",")
-                    .map((t) => t.trim())
-                    .filter(Boolean),
-                })
-              }
-              className={inputClass}
-              placeholder="chill, outdoorsy, fitness"
-            />
-          </Field>
-
           <Field label="Photo">
             <PhotoField
               slug={draft.slug}
@@ -389,12 +349,11 @@ function CreatorEditor({
             />
           </Field>
 
-          <Field label="Video URL (optional)">
-            <input
-              value={draft.video ?? ""}
-              onChange={(e) => onChange({ video: e.target.value || null })}
-              className={inputClass}
-              placeholder="https://…"
+          <Field label="Video (optional)">
+            <VideoField
+              slug={draft.slug}
+              value={draft.video}
+              onChange={(video) => onChange({ video })}
             />
           </Field>
 
@@ -408,13 +367,28 @@ function CreatorEditor({
           </Field>
 
           <Field label="Activity tag">
-            <input
+            <select
               value={draft.activity}
               onChange={(e) => onChange({ activity: e.target.value })}
               className={inputClass}
-              placeholder="active today"
-            />
+            >
+              {ACTIVITY_OPTIONS.map((opt) => (
+                <option
+                  key={opt.value || "random"}
+                  value={opt.value}
+                  className="bg-neutral-900"
+                >
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </Field>
+
+          <p className="text-[10px] text-neutral-500 pt-1">
+            Slug:{" "}
+            <span className="font-mono text-neutral-400">{draft.slug}</span>
+            {" "}· auto-generated
+          </p>
         </div>
       </div>
     </div>
@@ -535,6 +509,100 @@ function PhotoField({
         <p className="text-[10px] text-neutral-500">
           Uploads commit to <span className="font-mono">public/creators/</span>{" "}
           and live within ~30–60s of saving.
+        </p>
+      )}
+    </div>
+  );
+}
+
+function VideoField({
+  slug,
+  value,
+  onChange,
+}: {
+  slug: string;
+  value: string | null;
+  onChange: (url: string | null) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function pickFile(file: File) {
+    setError(null);
+    if (!slug.trim()) {
+      setError("Set the slug first.");
+      return;
+    }
+    if (!file.type.startsWith("video/")) {
+      setError("That doesn't look like a video.");
+      return;
+    }
+    if (file.size > 25 * 1024 * 1024) {
+      setError("Video too large — keep it under 25 MB.");
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const res = await uploadCreatorVideoAction(slug, file.name, base64);
+      if (res.ok) {
+        onChange(res.url);
+      } else {
+        setError(res.error);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          onClick={() => fileRef.current?.click()}
+          disabled={uploading}
+          className="bg-white/[0.06] border border-white/15 rounded-xl px-3 py-2 text-sm font-bold hover:bg-white/[0.1] active:scale-95 transition-all disabled:opacity-50"
+        >
+          {uploading ? "Uploading…" : value ? "Replace video" : "Upload video"}
+        </button>
+        {value ? (
+          <button
+            type="button"
+            onClick={() => onChange(null)}
+            disabled={uploading}
+            className="text-xs text-neutral-400 hover:text-red-400 transition-colors disabled:opacity-50"
+          >
+            Remove
+          </button>
+        ) : null}
+        <input
+          ref={fileRef}
+          type="file"
+          accept="video/mp4,video/webm,video/quicktime"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) pickFile(file);
+          }}
+        />
+      </div>
+      <input
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value || null)}
+        className={inputClass}
+        placeholder="…or paste a video URL"
+      />
+      {error ? (
+        <p className="text-xs text-red-400">{error}</p>
+      ) : (
+        <p className="text-[10px] text-neutral-500">
+          MP4 / WebM / MOV, ≤25 MB. Plays muted on the swipe card if set.
         </p>
       )}
     </div>

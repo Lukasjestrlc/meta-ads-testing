@@ -13,6 +13,7 @@ import {
   isStoreConfigured,
   loadCreators,
   savePhoto,
+  saveVideo,
   saveCreators,
 } from "@/lib/creatorStore";
 import type { Creator } from "@/data/creators";
@@ -125,6 +126,16 @@ export type UploadResult =
   | { ok: false; error: string };
 
 const MAX_PHOTO_BASE64_BYTES = 7 * 1024 * 1024; // ~5 MB raw file
+const MAX_VIDEO_BASE64_BYTES = 35 * 1024 * 1024; // ~25 MB raw file
+
+function notConfigured(): UploadResult {
+  return {
+    ok: false,
+    error:
+      "GitHub commits aren't configured. Set GITHUB_TOKEN and GITHUB_REPO " +
+      "in Vercel env vars and redeploy.",
+  };
+}
 
 export async function uploadCreatorPhotoAction(
   slug: string,
@@ -132,15 +143,7 @@ export async function uploadCreatorPhotoAction(
   base64: string
 ): Promise<UploadResult> {
   await requireAdmin();
-
-  if (!isStoreConfigured()) {
-    return {
-      ok: false,
-      error:
-        "GitHub commits aren't configured. Set GITHUB_TOKEN and GITHUB_REPO " +
-        "in Vercel env vars and redeploy.",
-    };
-  }
+  if (!isStoreConfigured()) return notConfigured();
 
   if (!base64) return { ok: false, error: "No file data received." };
   if (base64.length > MAX_PHOTO_BASE64_BYTES) {
@@ -158,20 +161,36 @@ export async function uploadCreatorPhotoAction(
   }
 }
 
+export async function uploadCreatorVideoAction(
+  slug: string,
+  filename: string,
+  base64: string
+): Promise<UploadResult> {
+  await requireAdmin();
+  if (!isStoreConfigured()) return notConfigured();
+
+  if (!base64) return { ok: false, error: "No file data received." };
+  if (base64.length > MAX_VIDEO_BASE64_BYTES) {
+    return { ok: false, error: "Video is too large — keep it under ~25 MB." };
+  }
+
+  try {
+    const url = await saveVideo(slug, filename, base64);
+    return { ok: true, url };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Upload failed.",
+    };
+  }
+}
+
 function normalizeCreator(c: Creator): Creator {
   return {
     slug: c.slug.trim(),
     name: c.name.trim(),
     age: Number.isFinite(c.age) ? Math.max(18, Math.floor(c.age)) : 21,
-    city: (c.city ?? "").trim(),
     bio: (c.bio ?? "").trim(),
-    match: Number.isFinite(c.match)
-      ? Math.max(0, Math.min(100, Math.round(c.match)))
-      : 90,
-    tags: (c.tags ?? [])
-      .map((t) => t.trim())
-      .filter((t) => t.length > 0)
-      .slice(0, 8),
     photo: c.photo?.trim() ? c.photo.trim() : null,
     video: c.video?.trim() ? c.video.trim() : null,
     destUrl: c.destUrl.trim(),

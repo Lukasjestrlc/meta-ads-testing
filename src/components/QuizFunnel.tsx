@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { type Creator } from "@/data/creators";
+import { type Creator, pickActivity } from "@/data/creators";
 import CreatorCard from "./CreatorCard";
 import Stage from "./Stage";
 
@@ -508,7 +508,18 @@ function Swiping({
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerCancel}
           >
-            {current.photo ? (
+            {current.video ? (
+              <video
+                key={current.video}
+                src={current.video}
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="metadata"
+                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
+              />
+            ) : current.photo ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={current.photo}
@@ -555,21 +566,12 @@ function Swiping({
                   ✓
                 </span>
               </div>
-              <p className="text-xs text-white/80 mb-2">
-                📍 {current.city}
-              </p>
-              <p className="text-sm text-white/90 leading-relaxed mb-3 line-clamp-2">
+              <p className="text-sm text-white/90 leading-relaxed line-clamp-2 mb-2">
                 {current.bio}
               </p>
-              <div className="flex flex-wrap gap-1.5">
-                {current.tags.map((tag) => (
-                  <span
-                    key={tag}
-                    className="text-[10px] uppercase tracking-wider font-bold bg-white/15 backdrop-blur-md px-2 py-1 rounded-full border border-white/20"
-                  >
-                    {tag}
-                  </span>
-                ))}
+              <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#4ade80]">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+                {pickActivity(current.activity)}
               </div>
             </div>
           </div>

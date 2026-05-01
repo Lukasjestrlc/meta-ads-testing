@@ -2,11 +2,12 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   experimental: {
-    // Photo uploads in /admin go through a server action that takes a
-    // base64-encoded image. Default cap is 1MB; bump to 8MB so a ~5MB
-    // raw photo (≈7MB base64) fits with headroom.
+    // Admin photo + video uploads go through a server action that takes
+    // a base64-encoded payload. Default cap is 1MB; bump to 50MB so a
+    // ~25MB raw video (≈35MB base64) fits with headroom. Photos at ≤5MB
+    // are well within this.
     serverActions: {
-      bodySizeLimit: "8mb",
+      bodySizeLimit: "50mb",
     },
   },
 };

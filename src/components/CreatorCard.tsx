@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import type { Creator } from "@/data/creators";
+import { type Creator, pickActivity } from "@/data/creators";
 
 const PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 
@@ -89,7 +89,7 @@ export default function CreatorCard({ creator }: { creator: Creator }) {
 
       {/* Match chip — top-right */}
       <div className="absolute top-3 right-3 bg-[hsl(330_80%_70%)] text-white text-[10px] font-extrabold tracking-wide px-2.5 py-1 rounded-full shadow-[0_4px_14px_rgba(240,117,179,0.5)]">
-        {creator.match}% MATCH
+        100% MATCH
       </div>
 
       {/* Active dot — top-left */}
@@ -98,7 +98,7 @@ export default function CreatorCard({ creator }: { creator: Creator }) {
           <span className="absolute inline-flex h-full w-full rounded-full bg-[#4ade80] opacity-75 animate-ping" />
           <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[#4ade80]" />
         </span>
-        {creator.activity}
+        {pickActivity(creator.activity)}
       </div>
 
       {/* Bottom info */}
@@ -117,9 +117,6 @@ export default function CreatorCard({ creator }: { creator: Creator }) {
             ✓
           </span>
         </div>
-        <p className="text-[11px] text-white/70 mb-2 truncate">
-          📍 {creator.city}
-        </p>
         <p className="text-[11px] text-white/85 line-clamp-2 leading-snug">
           {creator.bio}
         </p>
