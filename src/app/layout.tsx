@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Quicksand } from "next/font/google";
 import ClarityScript from "@/components/ClarityScript";
 import "./globals.css";
@@ -14,6 +14,25 @@ const quicksand = Quicksand({
 export const metadata: Metadata = {
   title: "Daisy Hub",
   description: "A small, hand-curated directory of independent professionals.",
+  // iOS treats the page as a "web app" when added to home screen — colors
+  // the status bar to match the dark theme so there's no white strip.
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "black-translucent",
+    title: "Daisy Hub",
+  },
+};
+
+// Mobile chrome (iOS Safari address bar, Android status bar) tints to this
+// color so the brand bleeds into the OS chrome instead of a default white.
+// `viewportFit: "cover"` lets us paint behind the iPhone notch / home
+// indicator and use safe-area insets where needed.
+export const viewport: Viewport = {
+  themeColor: "#0a0a0a",
+  colorScheme: "dark",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

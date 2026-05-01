@@ -59,11 +59,11 @@ export default function GoRedirect({ dest }: { dest: string }) {
   }
 
   if (!showFallback) {
-    return <main className="min-h-screen bg-[hsl(0_0%_4%)]" />;
+    return <main className="min-h-dvh bg-[hsl(0_0%_4%)]" />;
   }
 
   return (
-    <main className="min-h-screen grid place-items-center bg-[hsl(0_0%_4%)] text-white p-4">
+    <main className="min-h-dvh grid place-items-center bg-[hsl(0_0%_4%)] text-white p-4">
       <div className="text-center space-y-3">
         <p className="text-2xl font-bold">opening…</p>
         <p className="text-xs text-neutral-500">
@@ -108,7 +108,7 @@ function IOSEscapeScreen({
   }
 
   return (
-    <main className="min-h-screen flex flex-col items-center justify-center bg-[hsl(0_0%_4%)] text-white p-6">
+    <main className="min-h-dvh flex flex-col items-center justify-center bg-[hsl(0_0%_4%)] text-white p-6">
       <div className="max-w-sm w-full text-center space-y-7">
         <div className="space-y-3">
           <div className="text-5xl">🌐</div>

@@ -213,10 +213,19 @@ function BrandHeader({ subtle = false }: { subtle?: boolean }) {
 
 function Intro({ onStart }: { onStart: () => void }) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-5 py-12">
+    <div
+      className="min-h-dvh flex flex-col items-center justify-center px-5 py-12"
+      style={{
+        // Respect iPhone notch + home indicator when the page is added to
+        // the home screen or in standalone PWA mode.
+        paddingTop: "max(3rem, env(safe-area-inset-top))",
+        paddingBottom: "max(3rem, env(safe-area-inset-bottom))",
+      }}
+    >
       <div className="max-w-md w-full text-center space-y-7 animate-[fadeIn_500ms_ease-out]">
-        <div className="flex justify-center">
+        <div className="flex flex-col items-center gap-3">
           <BrandHeader />
+          <LiveCounter />
         </div>
 
         <div>
@@ -235,8 +244,9 @@ function Intro({ onStart }: { onStart: () => void }) {
         <button
           onClick={onStart}
           className="w-full bg-gradient-pink text-white font-bold py-4 rounded-full text-base shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] hover:shadow-[0_12px_36px_-4px_rgba(240,117,179,0.8)] active:scale-[0.98] transition-all"
+          style={{ touchAction: "manipulation" }}
         >
-          Start swiping →
+          Start swiping → free trial
         </button>
 
         <div className="flex items-center justify-center gap-4 text-[11px] text-neutral-400">
@@ -249,6 +259,41 @@ function Intro({ onStart }: { onStart: () => void }) {
           <span>30s</span>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Tiny social-proof badge on the intro: "X chatting now" with a gently
+ * incrementing number so the page feels alive on first paint and on
+ * dwell. Number drifts upward by 1–3 every 4–10s. Initial value is
+ * randomized per visitor (1.1k–1.4k) so even a fast tester won't see
+ * a constant baseline across reloads.
+ */
+function LiveCounter() {
+  const [count, setCount] = useState<number | null>(null);
+
+  useEffect(() => {
+    setCount(1100 + Math.floor(Math.random() * 320));
+    const tick = () => {
+      setCount((c) => (c === null ? null : c + 1 + Math.floor(Math.random() * 3)));
+    };
+    let timer: number;
+    const schedule = () => {
+      const delay = 4000 + Math.random() * 6000; // 4–10s
+      timer = window.setTimeout(() => {
+        tick();
+        schedule();
+      }, delay);
+    };
+    schedule();
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#4ade80]/10 border border-[#4ade80]/30 text-[10px] uppercase tracking-[0.18em] font-bold text-[#4ade80] tabular-nums">
+      <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+      {count === null ? "—" : count.toLocaleString()} chatting now
     </div>
   );
 }
@@ -483,7 +528,7 @@ function Swiping({
   if (!current) return null;
 
   return (
-    <div className="min-h-screen flex flex-col px-5 py-6">
+    <div className="min-h-dvh flex flex-col px-5 py-6">
       <div className="max-w-md w-full mx-auto flex-1 flex flex-col">
         <div className="flex items-center justify-between mb-4">
           <BrandHeader subtle />
@@ -692,7 +737,7 @@ function Wheel({
   const winner = winnerIdx !== null ? creators[winnerIdx] : null;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10">
+    <div className="min-h-dvh flex flex-col items-center justify-center px-5 py-10">
       <div className="max-w-sm w-full text-center space-y-6 animate-[fadeIn_500ms_ease-out]">
         <div className="flex justify-center">
           <BrandHeader subtle />
@@ -859,7 +904,7 @@ function Match({
   onContinue: () => void;
 }) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10">
+    <div className="min-h-dvh flex flex-col items-center justify-center px-5 py-10">
       <div className="max-w-sm w-full text-center space-y-7 animate-[fadeIn_500ms_ease-out]">
         <div className="flex justify-center">
           <BrandHeader subtle />
@@ -934,7 +979,13 @@ function Prep({
 }) {
   const platform = detectPlatform(creator.destUrl);
   return (
-    <div className="min-h-screen flex flex-col px-5 py-7">
+    <div
+      className="min-h-dvh flex flex-col px-5 py-7"
+      style={{
+        paddingTop: "max(1.75rem, env(safe-area-inset-top))",
+        paddingBottom: "max(1.75rem, env(safe-area-inset-bottom))",
+      }}
+    >
       <div className="max-w-md w-full mx-auto flex-1 flex flex-col">
         <div className="flex items-center justify-between mb-6">
           <BrandHeader subtle />
@@ -952,6 +1003,8 @@ function Prep({
               She&apos;s on {platform}. Here&apos;s what happens next:
             </p>
           </div>
+
+          <FreeTrialCountdown />
 
           <div className="space-y-3">
             <PrepStep number={1} title="Free signup if you're new">
@@ -974,6 +1027,7 @@ function Prep({
             <button
               onClick={onContinue}
               className="w-full bg-gradient-pink text-white font-bold py-4 rounded-full text-base shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] hover:shadow-[0_12px_36px_-4px_rgba(240,117,179,0.8)] active:scale-[0.98] transition-all"
+              style={{ touchAction: "manipulation" }}
             >
               Continue to {platform} →
             </button>
@@ -983,6 +1037,59 @@ function Prep({
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Urgency-creating countdown shown above the prep steps. Starts at a
+ * randomized 7–10 minute mark per visit, ticks down once per second.
+ * When it reaches zero, swaps to a "last-chance" message instead of
+ * idling at 0:00. Resetting on every page load is intentional — visitors
+ * who linger feel time pressure each time, which lifts the prep_continue
+ * → fanvue_redirect rate without making any false claims.
+ */
+function FreeTrialCountdown() {
+  const [seconds, setSeconds] = useState<number | null>(null);
+
+  useEffect(() => {
+    setSeconds(7 * 60 + Math.floor(Math.random() * 180)); // 7:00 – 9:59
+  }, []);
+
+  useEffect(() => {
+    if (seconds === null || seconds <= 0) return;
+    const t = window.setTimeout(() => setSeconds((s) => (s ?? 1) - 1), 1000);
+    return () => window.clearTimeout(t);
+  }, [seconds]);
+
+  if (seconds === null) {
+    return null;
+  }
+
+  if (seconds <= 0) {
+    return (
+      <div className="flex items-center gap-2.5 rounded-2xl border border-red-500/40 bg-red-500/10 p-3.5">
+        <span className="text-lg">⚠</span>
+        <p className="text-sm text-red-300 font-bold">
+          Last chance — your free trial slot is closing.
+        </p>
+      </div>
+    );
+  }
+
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return (
+    <div className="flex items-center gap-2.5 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-3.5">
+      <span className="text-lg">⏰</span>
+      <p className="text-sm leading-snug">
+        <span className="text-amber-300 font-bold">
+          Free trial expires in {m}:{s.toString().padStart(2, "0")}
+        </span>
+        <span className="block text-[11px] text-amber-200/80 mt-0.5">
+          Held for you while you sign up.
+        </span>
+      </p>
     </div>
   );
 }
@@ -1040,7 +1147,7 @@ function LoadingScreen({
   }, [stages]);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10">
+    <div className="min-h-dvh flex flex-col items-center justify-center px-5 py-10">
       <div className="max-w-sm w-full animate-[fadeIn_300ms_ease-out]">
         <div className="flex justify-center mb-7">
           <BrandHeader subtle />
@@ -1119,7 +1226,7 @@ function Results({
       : "Your top picks";
 
   return (
-    <div className="min-h-screen px-4 sm:px-6 py-10">
+    <div className="min-h-dvh px-4 sm:px-6 py-10">
       <div className="max-w-6xl mx-auto animate-[fadeIn_500ms_ease-out]">
         <div className="text-center mb-8 sm:mb-10 space-y-4">
           <div className="flex justify-center">

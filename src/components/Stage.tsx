@@ -27,7 +27,7 @@ export default function Stage({
       .filter((p): p is string => typeof p === "string" && p.length > 0) ?? [];
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[hsl(0_0%_4%)] text-white">
+    <main className="relative min-h-dvh overflow-hidden bg-[hsl(0_0%_4%)] text-white">
       {photos.length > 0 && <PhotoMosaic photos={photos} />}
 
       {/* Brand color tint — soft multiply, low opacity so faces dominate. */}

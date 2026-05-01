@@ -35,9 +35,23 @@ body {
   color: hsl(var(--foreground));
 }
 
+html {
+  /* Stop the iOS overscroll bounce that exposes the white background and
+     breaks the immersive funnel feel. Also lock text-size so iOS doesn't
+     shrink portrait→landscape mid-funnel. */
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   font-family: var(--font-sans), system-ui, sans-serif;
   font-weight: 500;
+}
+
+/* Kill the gray flash on iOS when tapping anything. Replaced with our own
+   :active scale transitions on each button. */
+* {
+  -webkit-tap-highlight-color: transparent;
 }
 
 .bg-gradient-pink {
