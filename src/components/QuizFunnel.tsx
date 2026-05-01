@@ -901,14 +901,17 @@ function Wheel({
 
   const SPIN_MS = 4200;
   const FULL_TURNS = 5;
-  const RADIUS = 110; // distance from wheel center to avatars (px)
+  const RADIUS = 100; // distance from wheel center to avatars (px)
+  // Two-tone alternating slices in brand colors. Even-index slices use a
+  // deeper magenta, odd-index a warm peach — palette stays cohesive instead
+  // of looking like a kid's spinner with six unrelated colors.
   const SLICE_COLORS = [
-    "hsl(330 80% 65%)",
-    "hsl(20 90% 65%)",
-    "hsl(280 70% 65%)",
-    "hsl(355 80% 65%)",
-    "hsl(45 90% 60%)",
-    "hsl(200 75% 60%)",
+    "hsl(330 75% 58%)",
+    "hsl(15 80% 60%)",
+    "hsl(330 70% 50%)",
+    "hsl(15 75% 52%)",
+    "hsl(340 80% 55%)",
+    "hsl(20 75% 55%)",
   ];
 
   const sliceAngle = 360 / creators.length;
@@ -941,50 +944,57 @@ function Wheel({
   const winner = winnerIdx !== null ? creators[winnerIdx] : null;
 
   return (
-    <div className="min-h-dvh flex flex-col items-center justify-center px-5 py-10">
-      <div className="max-w-sm w-full text-center space-y-6 animate-[fadeIn_500ms_ease-out]">
-        <div className="flex justify-center">
-          <BrandHeader subtle />
-        </div>
+    <div className="min-h-dvh flex flex-col items-center justify-center px-5 py-8">
+      <div className="max-w-sm w-full text-center space-y-7 animate-[fadeIn_500ms_ease-out]">
+        <BrandHeader subtle />
 
-        <div className="space-y-2">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#4ade80]/10 border border-[#4ade80]/30">
-            <span className="text-[#4ade80] text-xs">★</span>
-            <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#4ade80]">
+        <div className="space-y-3">
+          <h1 className="font-extrabold tracking-[-0.02em] leading-[0.95]">
+            <span className="block text-[1.6rem] sm:text-[1.85rem] text-white/55 font-medium">
               Free trial · {creators.length} matches
             </span>
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">
-            Spin to unlock your free trial
+            <span className="block text-[2.4rem] sm:text-[2.75rem] bg-gradient-to-br from-white via-[hsl(330_80%_88%)] to-[hsl(20_90%_82%)] bg-clip-text text-transparent">
+              Spin for your match
+            </span>
           </h1>
-          <p className="text-sm text-neutral-300 leading-relaxed">
-            One of your matches gives you a free trial chat. Spin to see
-            which.
-          </p>
         </div>
 
-        <div className="relative mx-auto w-72 h-72 sm:w-80 sm:h-80">
-          {/* Pointer at the top */}
+        <div className="relative mx-auto w-[280px] h-[280px] sm:w-[300px] sm:h-[300px]">
+          {/* Soft outer glow — replaces the harsh ring */}
           <div
-            className="absolute left-1/2 -translate-x-1/2 -top-1 z-20"
-            style={{ filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.5))" }}
+            aria-hidden
+            className="absolute -inset-3 rounded-full opacity-70 pointer-events-none"
+            style={{
+              background:
+                "radial-gradient(circle at center, hsl(330 80% 60% / 0.45), transparent 70%)",
+              filter: "blur(20px)",
+            }}
+          />
+
+          {/* Pointer — sleeker downward arrow with brand color and shadow */}
+          <div
+            className="absolute left-1/2 -translate-x-1/2 -top-2.5 z-20"
+            style={{ filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.55))" }}
           >
-            <div
-              className="w-0 h-0"
-              style={{
-                borderLeft: "14px solid transparent",
-                borderRight: "14px solid transparent",
-                borderTop: "22px solid white",
-              }}
-            />
+            <svg width="28" height="22" viewBox="0 0 28 22" aria-hidden>
+              <path
+                d="M14 22 L0 0 L28 0 Z"
+                fill="white"
+              />
+              <path
+                d="M14 18 L4 1 L24 1 Z"
+                fill="hsl(330 80% 65%)"
+                opacity="0.75"
+              />
+            </svg>
           </div>
 
-          {/* Outer ring glow */}
-          <div className="absolute inset-0 rounded-full ring-4 ring-white/15 shadow-[0_0_60px_-10px_rgba(240,117,179,0.6)]" />
+          {/* Outer rim — thin, dark, defines the shape against the photo bg */}
+          <div className="absolute inset-0 rounded-full ring-1 ring-black/40" />
 
           {/* Spinning wheel */}
           <div
-            className="absolute inset-1 rounded-full overflow-hidden"
+            className="absolute inset-[2px] rounded-full overflow-hidden"
             style={{
               background: `conic-gradient(from 0deg, ${conicStops})`,
               transform: `rotate(${rotation}deg)`,
@@ -995,13 +1005,23 @@ function Wheel({
               willChange: "transform",
             }}
           >
-            {/* Slice dividers */}
+            {/* Subtle inner shadow for dimensionality */}
+            <div
+              aria-hidden
+              className="absolute inset-0 pointer-events-none rounded-full"
+              style={{
+                boxShadow:
+                  "inset 0 0 30px rgba(0,0,0,0.35), inset 0 0 80px rgba(0,0,0,0.15)",
+              }}
+            />
+
+            {/* Slice dividers — softer than the previous bright white lines */}
             {creators.map((_, i) => {
               const angle = i * sliceAngle;
               return (
                 <div
                   key={`div-${i}`}
-                  className="absolute top-1/2 left-1/2 origin-top w-px bg-white/30 pointer-events-none"
+                  className="absolute top-1/2 left-1/2 origin-top w-px bg-black/20 pointer-events-none"
                   style={{
                     height: "50%",
                     transform: `translate(-50%, 0) rotate(${angle}deg)`,
@@ -1009,7 +1029,8 @@ function Wheel({
                 />
               );
             })}
-            {/* Avatars positioned in each slice */}
+
+            {/* Avatars — smaller, no thick white halo, dark rim instead */}
             {creators.map((c, i) => {
               const center = i * sliceAngle + sliceAngle / 2;
               const rad = ((center - 90) * Math.PI) / 180;
@@ -1018,10 +1039,10 @@ function Wheel({
               return (
                 <div
                   key={c.slug}
-                  className="absolute top-1/2 left-1/2 w-14 h-14 -ml-7 -mt-7"
+                  className="absolute top-1/2 left-1/2 w-12 h-12 -ml-6 -mt-6"
                   style={{ transform: `translate(${x}px, ${y}px)` }}
                 >
-                  <div className="w-full h-full rounded-full overflow-hidden ring-2 ring-white/90 shadow-lg bg-neutral-800">
+                  <div className="w-full h-full rounded-full overflow-hidden ring-2 ring-black/30 shadow-[0_3px_8px_rgba(0,0,0,0.5)] bg-neutral-800">
                     {c.photo ? (
                       /* eslint-disable-next-line @next/next/no-img-element */
                       <img
@@ -1037,13 +1058,14 @@ function Wheel({
             })}
           </div>
 
-          {/* Center hub — solid mark instead of gift emoji */}
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white shadow-[0_4px_18px_rgba(0,0,0,0.5)] grid place-items-center pointer-events-none">
-            <SparkleIcon
-              className="text-[hsl(330_80%_45%)]"
-              width={20}
-              height={20}
-              strokeWidth={2.4}
+          {/* Center hub — refined, gradient-filled with a heart mark */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-14 h-14 rounded-full bg-gradient-to-br from-white to-white/85 shadow-[0_6px_20px_rgba(0,0,0,0.55),inset_0_-2px_4px_rgba(0,0,0,0.08)] grid place-items-center pointer-events-none">
+            <HeartIcon
+              className="text-[hsl(330_75%_50%)]"
+              width={22}
+              height={22}
+              fill="currentColor"
+              stroke="none"
             />
           </div>
         </div>
@@ -1051,9 +1073,10 @@ function Wheel({
         {phase === "idle" && (
           <button
             onClick={spin}
-            className="w-full bg-gradient-pink text-white font-extrabold tracking-wide py-4 rounded-full text-base shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] hover:shadow-[0_12px_36px_-4px_rgba(240,117,179,0.8)] active:scale-[0.98] transition-all uppercase"
+            className="w-full bg-gradient-pink text-white font-extrabold tracking-[0.08em] py-4 rounded-full text-base shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] hover:shadow-[0_12px_36px_-4px_rgba(240,117,179,0.8)] active:scale-[0.98] transition-all uppercase"
+            style={{ touchAction: "manipulation" }}
           >
-            SPIN
+            Spin the wheel
           </button>
         )}
 
@@ -1079,22 +1102,23 @@ function WheelResult({
   return (
     <div className="relative space-y-4 animate-[fadeIn_500ms_ease-out]">
       <ConfettiBurst />
-      <div className="rounded-2xl border border-[#4ade80]/40 bg-[#4ade80]/10 p-5 space-y-2">
-        <div className="inline-flex items-center justify-center w-9 h-9 rounded-full bg-[#4ade80] text-black">
+      <div className="relative rounded-2xl border border-white/10 bg-white/[0.04] backdrop-blur-md p-5 flex items-center gap-4">
+        <div className="flex-shrink-0 inline-flex items-center justify-center w-10 h-10 rounded-full bg-[#4ade80] text-black">
           <CheckIcon width={20} height={20} strokeWidth={3} />
         </div>
-        <p className="text-base font-bold">
-          Free trial unlocked with{" "}
-          <span className="text-[#4ade80]">{creator.name}</span>
-        </p>
-        <p className="text-xs text-neutral-300 leading-relaxed">
-          Your free trial activates the moment you open her page. No card
-          needed to start chatting.
-        </p>
+        <div className="text-left min-w-0">
+          <p className="text-[11px] uppercase tracking-[0.18em] font-bold text-[#4ade80]">
+            Free trial unlocked
+          </p>
+          <p className="text-base font-bold mt-0.5">
+            with <span className="text-white">{creator.name}</span>
+          </p>
+        </div>
       </div>
       <button
         onClick={onContinue}
         className="w-full bg-gradient-pink text-white font-bold py-4 rounded-full text-base shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] active:scale-[0.98] transition-all"
+        style={{ touchAction: "manipulation" }}
       >
         Continue with {creator.name} →
       </button>
