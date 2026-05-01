@@ -16,6 +16,19 @@ type Step =
   | { kind: "matchedLoading" }
   | { kind: "results" };
 
+/**
+ * Deterministic 1–4 "free trial slots left" per creator. Hashes the slug so
+ * the number stays consistent across renders and reloads (no jarring jump
+ * from 3 → 1 mid-session) while still feeling per-creator-specific.
+ */
+function slotsLeftFor(slug: string): number {
+  let h = 0;
+  for (let i = 0; i < slug.length; i++) {
+    h = (h * 31 + slug.charCodeAt(i)) >>> 0;
+  }
+  return 1 + (h % 4); // 1–4
+}
+
 function buildMatchedStages(name: string) {
   return [
     { label: `Letting ${name} know you're on your way…`, duration: 900 },
@@ -163,7 +176,9 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
 
   return (
     <Stage creators={creators}>
-      {step.kind === "intro" && <Intro onStart={start} />}
+      {step.kind === "intro" && (
+        <Intro creators={creators} onStart={start} />
+      )}
       {step.kind === "swiping" && (
         <Swiping creators={creators} onComplete={onSwipeComplete} />
       )}
@@ -211,35 +226,41 @@ function BrandHeader({ subtle = false }: { subtle?: boolean }) {
 
 // ─────────────────────── screens ───────────────────────
 
-function Intro({ onStart }: { onStart: () => void }) {
+function Intro({
+  creators,
+  onStart,
+}: {
+  creators: Creator[];
+  onStart: () => void;
+}) {
+  // Show the first ~3 creators as a peeking deck preview. Falls back to
+  // whatever's available if the list is shorter.
+  const previewCreators = creators.slice(0, 3);
+
   return (
     <div
-      className="min-h-dvh flex flex-col items-center justify-center px-5 py-12"
+      className="min-h-dvh flex flex-col items-center justify-center px-5 py-8"
       style={{
-        // Respect iPhone notch + home indicator when the page is added to
-        // the home screen or in standalone PWA mode.
-        paddingTop: "max(3rem, env(safe-area-inset-top))",
-        paddingBottom: "max(3rem, env(safe-area-inset-bottom))",
+        paddingTop: "max(2rem, env(safe-area-inset-top))",
+        paddingBottom: "max(2rem, env(safe-area-inset-bottom))",
       }}
     >
-      <div className="max-w-md w-full text-center space-y-7 animate-[fadeIn_500ms_ease-out]">
-        <div className="flex flex-col items-center gap-3">
+      <div className="max-w-md w-full text-center space-y-5 animate-[fadeIn_500ms_ease-out]">
+        <div className="flex flex-col items-center gap-2">
           <BrandHeader />
           <LiveCounter />
         </div>
 
-        <div>
-          <h1 className="text-[2.5rem] sm:text-[3.5rem] font-extrabold tracking-tight leading-[1.05] mb-4">
-            Find creators that{" "}
-            <span className="bg-gradient-to-r from-[hsl(330_80%_75%)] via-[hsl(355_85%_75%)] to-[hsl(20_90%_70%)] bg-clip-text text-transparent">
-              match your vibe
-            </span>
-          </h1>
-          <p className="text-neutral-300 text-base leading-relaxed max-w-sm mx-auto">
-            Swipe through hand-picked creators. Tap the heart on one
-            you&apos;d like to connect with — we&apos;ll handle the intro.
-          </p>
-        </div>
+        <h1 className="text-[2rem] sm:text-[2.75rem] font-extrabold tracking-tight leading-[1.05]">
+          Find creators that{" "}
+          <span className="bg-gradient-to-r from-[hsl(330_80%_75%)] via-[hsl(355_85%_75%)] to-[hsl(20_90%_70%)] bg-clip-text text-transparent">
+            match your vibe
+          </span>
+        </h1>
+
+        {previewCreators.length > 0 && (
+          <PreviewDeck creators={previewCreators} />
+        )}
 
         <button
           onClick={onStart}
@@ -248,6 +269,8 @@ function Intro({ onStart }: { onStart: () => void }) {
         >
           Start swiping → free trial
         </button>
+
+        <ActivityTicker creators={creators} />
 
         <div className="flex items-center justify-center gap-4 text-[11px] text-neutral-400">
           <span className="flex items-center gap-1.5">
@@ -258,6 +281,143 @@ function Intro({ onStart }: { onStart: () => void }) {
           <span className="text-neutral-700">·</span>
           <span>30s</span>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Preview "card stack" hint above the CTA — shows the first creator as a
+ * Tinder-style card with two more peeking behind it. Communicates "this
+ * is a swipe app" before the user has to tap anything. Static (doesn't
+ * actually swipe), since the real deck is one tap away.
+ */
+function PreviewDeck({ creators }: { creators: Creator[] }) {
+  return (
+    <div className="relative h-56 sm:h-64">
+      {creators
+        .slice(0, 3)
+        .reverse()
+        .map((c, idx) => {
+          // Reversed so card 0 (front) is rendered LAST and on top.
+          const depthFromFront = creators.length - 1 - idx;
+          const offset = depthFromFront * 6;
+          const scale = 1 - depthFromFront * 0.04;
+          const rot = depthFromFront === 1 ? -3 : depthFromFront === 2 ? 3 : 0;
+          const opacity = depthFromFront === 0 ? 1 : 0.7;
+          return (
+            <div
+              key={c.slug}
+              className="absolute left-1/2 top-1/2 w-40 sm:w-44 aspect-[3/4] rounded-2xl overflow-hidden bg-neutral-900 ring-1 ring-white/15 shadow-[0_12px_30px_-8px_rgba(0,0,0,0.7)]"
+              style={{
+                transform: `translate(-50%, -50%) translateY(${offset}px) scale(${scale}) rotate(${rot}deg)`,
+                opacity,
+                zIndex: 10 - depthFromFront,
+              }}
+            >
+              {c.photo ? (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img
+                  src={c.photo}
+                  alt=""
+                  className="absolute inset-0 w-full h-full object-cover"
+                  style={{ objectPosition: "center 30%" }}
+                  draggable={false}
+                />
+              ) : (
+                <div className="absolute inset-0 bg-gradient-to-br from-neutral-700 to-neutral-900" />
+              )}
+              {depthFromFront === 0 && (
+                <>
+                  <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/95 to-transparent" />
+                  <div className="absolute left-3 bottom-3 right-3 text-left">
+                    <div className="text-lg font-extrabold leading-tight">
+                      {c.name}{" "}
+                      <span className="text-white/80 font-semibold text-sm">
+                        {c.age}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="absolute top-2 left-1/2 -translate-x-1/2 text-[9px] uppercase tracking-wider font-bold text-white/80 bg-black/60 backdrop-blur-md px-2 py-0.5 rounded-full">
+                    ←  swipe  →
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        })}
+    </div>
+  );
+}
+
+const TICKER_NAMES = [
+  "Mike",
+  "Tom",
+  "Alex",
+  "Chris",
+  "Jay",
+  "Dan",
+  "Mark",
+  "Ben",
+  "Sam",
+  "Ryan",
+  "Luca",
+  "Will",
+  "Noah",
+  "Ethan",
+];
+const TICKER_VERBS = [
+  "just got matched with",
+  "unlocked a free trial with",
+  "started chatting with",
+  "matched with",
+  "is now chatting with",
+];
+
+/**
+ * Rotating social-proof toast on the intro. Picks a random "guy name +
+ * verb + creator name" combo every 5–8s. Uses the actual creators list
+ * so the names line up with the swipe deck the user is about to see —
+ * fewer "wait, who's that" moments after they hit Start.
+ */
+function ActivityTicker({ creators }: { creators: Creator[] }) {
+  const [msg, setMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (creators.length === 0) return;
+    const generate = () => {
+      const name =
+        TICKER_NAMES[Math.floor(Math.random() * TICKER_NAMES.length)];
+      const verb =
+        TICKER_VERBS[Math.floor(Math.random() * TICKER_VERBS.length)];
+      const c = creators[Math.floor(Math.random() * creators.length)];
+      return `${name} ${verb} ${c.name}`;
+    };
+    setMsg(generate());
+    let timer: number;
+    const tick = () => {
+      timer = window.setTimeout(
+        () => {
+          setMsg(generate());
+          tick();
+        },
+        5000 + Math.random() * 3000
+      );
+    };
+    tick();
+    return () => window.clearTimeout(timer);
+  }, [creators]);
+
+  if (!msg) return null;
+
+  return (
+    <div className="h-6 flex items-center justify-center">
+      <div
+        key={msg}
+        className="inline-flex items-center gap-1.5 text-[11px] text-white/65 animate-[fadeIn_400ms_ease-out]"
+      >
+        <span className="text-[hsl(330_80%_70%)]">💗</span>
+        {msg}
       </div>
     </div>
   );
@@ -644,9 +804,15 @@ function Swiping({
               <p className="text-sm text-white/90 leading-relaxed line-clamp-2 mb-2">
                 {current.bio}
               </p>
-              <div className="inline-flex items-center gap-1.5 text-[11px] font-bold text-[#4ade80]">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
-                {pickActivity(current.activity)}
+              <div className="flex items-center flex-wrap gap-x-2 gap-y-1 text-[11px] font-bold">
+                <span className="inline-flex items-center gap-1.5 text-[#4ade80]">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+                  {pickActivity(current.activity)}
+                </span>
+                <span className="text-white/30">·</span>
+                <span className="text-amber-300">
+                  🔥 {slotsLeftFor(current.slug)} free trial slots left
+                </span>
               </div>
             </div>
           </div>
@@ -868,7 +1034,8 @@ function WheelResult({
   onContinue: () => void;
 }) {
   return (
-    <div className="space-y-4 animate-[fadeIn_500ms_ease-out]">
+    <div className="relative space-y-4 animate-[fadeIn_500ms_ease-out]">
+      <ConfettiBurst />
       <div className="rounded-2xl border border-[#4ade80]/40 bg-[#4ade80]/10 p-5 space-y-2">
         <div className="text-2xl">🎉</div>
         <p className="text-base font-bold">
@@ -886,6 +1053,64 @@ function WheelResult({
       >
         Continue with {creator.name} →
       </button>
+    </div>
+  );
+}
+
+/**
+ * Confetti burst that fires once when the wheel-result reveal panel mounts.
+ * Each particle is a small absolutely-positioned div with random direction
+ * (--dx, --dy) and a single shared keyframe (confetti-burst in globals.css)
+ * so the animation cost is one paint, not 24 individual animations.
+ */
+function ConfettiBurst() {
+  const COUNT = 26;
+  const COLORS = [
+    "#f075b3",
+    "#ff8a8a",
+    "#ffd166",
+    "#4ade80",
+    "#a78bfa",
+    "#3b82f6",
+  ];
+  const particles = Array.from({ length: COUNT }, (_, i) => {
+    const angle = (i / COUNT) * 360 + (Math.random() * 30 - 15);
+    const distance = 90 + Math.random() * 80;
+    const dx = Math.cos((angle * Math.PI) / 180) * distance;
+    const dy = Math.sin((angle * Math.PI) / 180) * distance;
+    return {
+      i,
+      dx,
+      dy,
+      size: 6 + Math.random() * 6,
+      color: COLORS[i % COLORS.length],
+      duration: 1.3 + Math.random() * 0.7,
+      delay: Math.random() * 0.15,
+    };
+  });
+  return (
+    <div
+      aria-hidden
+      className="pointer-events-none absolute inset-0 overflow-visible"
+    >
+      {particles.map((p) => (
+        <span
+          key={p.i}
+          className="absolute top-[10%] left-1/2 rounded-full"
+          style={{
+            width: `${p.size}px`,
+            height: `${p.size}px`,
+            backgroundColor: p.color,
+            transform: "translate(-50%, -50%)",
+            animation: `confetti-burst ${p.duration}s ease-out ${p.delay}s forwards`,
+            // CSS custom props read by the keyframe — let one animation
+            // handle 26 directions without writing 26 keyframes.
+            ["--dx" as string]: `${p.dx}px`,
+            ["--dy" as string]: `${p.dy}px`,
+            willChange: "transform, opacity",
+          } as React.CSSProperties}
+        />
+      ))}
     </div>
   );
 }
@@ -941,10 +1166,7 @@ function Match({
             She&apos;s online now and ready to chat. Your free trial is
             active — open her page to send your first message.
           </p>
-          <div className="inline-flex items-center gap-1.5 mt-2 text-[11px] text-[#4ade80]">
-            <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
-            she replied 2 min ago
-          </div>
+          <RepliedAgo name={creator.name} />
         </div>
 
         <button
@@ -954,6 +1176,50 @@ function Match({
           Open her chat →
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Live "[Name] replied Xs ago" badge on the Match screen. Starts at a
+ * random 12–80s "ago" the first time the user lands on Match, then ticks
+ * up by one second per second so it feels real-time. Once it crosses 60s
+ * it switches to "X min ago" formatting.
+ */
+function RepliedAgo({ name }: { name: string }) {
+  const [seconds, setSeconds] = useState<number | null>(null);
+
+  useEffect(() => {
+    setSeconds(12 + Math.floor(Math.random() * 68));
+  }, []);
+
+  useEffect(() => {
+    if (seconds === null) return;
+    const t = window.setInterval(
+      () => setSeconds((s) => (s === null ? null : s + 1)),
+      1000
+    );
+    return () => window.clearInterval(t);
+  }, [seconds === null]);
+
+  if (seconds === null) {
+    return (
+      <div className="inline-flex items-center gap-1.5 mt-2 text-[11px] text-[#4ade80]">
+        <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+        online
+      </div>
+    );
+  }
+
+  const text =
+    seconds < 60
+      ? `${name} replied ${seconds}s ago`
+      : `${name} replied ${Math.floor(seconds / 60)} min ago`;
+
+  return (
+    <div className="inline-flex items-center gap-1.5 mt-2 text-[11px] text-[#4ade80] tabular-nums">
+      <span className="w-1.5 h-1.5 rounded-full bg-[#4ade80] animate-pulse" />
+      {text}
     </div>
   );
 }
