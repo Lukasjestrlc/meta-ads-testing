@@ -10,6 +10,7 @@ const PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 type Step =
   | { kind: "intro" }
   | { kind: "swiping" }
+  | { kind: "wheel" }
   | { kind: "match" }
   | { kind: "question"; index: number }
   | { kind: "prep" }
@@ -135,15 +136,28 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
       content_category: "creator_match",
       num_liked: likedSlugs.length,
     });
-    if (likedSlugs.length > 0) {
-      // Tinder-style match celebration first, then the personalized chat-prep
-      // quiz. The match screen does the heavy lifting on reciprocity framing
-      // ("she liked you too"), so the quiz can stay focused on screening.
+    if (likedSlugs.length >= 2) {
+      // Multiple matches → spin-the-wheel decides which one unlocks his free
+      // trial. Adds a dopamine moment + makes the picked creator feel earned.
+      setStep({ kind: "wheel" });
+    } else if (likedSlugs.length === 1) {
+      // Only one match — no need for a wheel, go straight to the celebration.
       setStep({ kind: "match" });
     } else {
       // Skipped everyone — show the grid so they can still pick one
       setStep({ kind: "results" });
     }
+  }
+
+  function onWheelResult(slug: string) {
+    firePixel("Lead", {
+      content_name: "wheel_result",
+      content_category: "creator_match",
+      content_ids: [slug],
+    });
+    // Reorder likes so the wheel's winner becomes the target creator (likes[0]).
+    setLikes((prev) => [slug, ...prev.filter((s) => s !== slug)]);
+    setStep({ kind: "match" });
   }
 
   function onMatchContinue() {
@@ -184,6 +198,12 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
       {step.kind === "intro" && <Intro onStart={start} />}
       {step.kind === "swiping" && (
         <Swiping creators={creators} onComplete={onSwipeComplete} />
+      )}
+      {step.kind === "wheel" && (
+        <Wheel
+          creators={creators.filter((c) => likes.includes(c.slug))}
+          onResult={onWheelResult}
+        />
       )}
       {step.kind === "match" && (
         <Match creator={targetCreator} onContinue={onMatchContinue} />
@@ -651,6 +671,221 @@ function Swiping({
 }
 
 /**
+ * Spin-the-wheel that fires when the visitor has matched with 2+ creators.
+ * Picks one at random, frames it as unlocking a free trial, then funnels
+ * into the standard match → quiz → prep flow with the winner as target.
+ *
+ * Math: with N slices, slice K's center sits at K*(360/N) + (360/N)/2 from
+ * 12 o'clock, clockwise. A wheel rotated by R degrees lands slice K's
+ * center at the top when R ≡ -sliceCenter (mod 360). We add 5 full turns
+ * for a satisfying spin animation.
+ */
+function Wheel({
+  creators,
+  onResult,
+}: {
+  creators: Creator[];
+  onResult: (slug: string) => void;
+}) {
+  const [phase, setPhase] = useState<"idle" | "spinning" | "result">("idle");
+  const [rotation, setRotation] = useState(0);
+  const [winnerIdx, setWinnerIdx] = useState<number | null>(null);
+
+  const SPIN_MS = 4200;
+  const FULL_TURNS = 5;
+  const RADIUS = 110; // distance from wheel center to avatars (px)
+  const SLICE_COLORS = [
+    "hsl(330 80% 65%)",
+    "hsl(20 90% 65%)",
+    "hsl(280 70% 65%)",
+    "hsl(355 80% 65%)",
+    "hsl(45 90% 60%)",
+    "hsl(200 75% 60%)",
+  ];
+
+  const sliceAngle = 360 / creators.length;
+  const conicStops = creators
+    .map((_, i) => {
+      const start = i * sliceAngle;
+      const end = (i + 1) * sliceAngle;
+      return `${SLICE_COLORS[i % SLICE_COLORS.length]} ${start}deg ${end}deg`;
+    })
+    .join(", ");
+
+  function spin() {
+    if (phase !== "idle") return;
+    const winner = Math.floor(Math.random() * creators.length);
+    const sliceCenter = winner * sliceAngle + sliceAngle / 2;
+    const final = FULL_TURNS * 360 + (360 - sliceCenter);
+
+    firePixel("Lead", {
+      content_name: "wheel_spin",
+      content_category: "creator_match",
+    });
+
+    setWinnerIdx(winner);
+    setRotation(final);
+    setPhase("spinning");
+    window.setTimeout(() => setPhase("result"), SPIN_MS);
+  }
+
+  const winner = winnerIdx !== null ? creators[winnerIdx] : null;
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10">
+      <div className="max-w-sm w-full text-center space-y-6 animate-[fadeIn_500ms_ease-out]">
+        <div className="flex justify-center">
+          <BrandHeader subtle />
+        </div>
+
+        <div className="space-y-2">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#4ade80]/10 border border-[#4ade80]/30">
+            <span className="text-[#4ade80] text-xs">★</span>
+            <span className="text-[10px] uppercase tracking-[0.2em] font-bold text-[#4ade80]">
+              Free trial · {creators.length} matches
+            </span>
+          </div>
+          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight leading-tight">
+            Spin to unlock your free trial
+          </h1>
+          <p className="text-sm text-neutral-300 leading-relaxed">
+            One of your matches gives you a free trial chat. Spin to see
+            which.
+          </p>
+        </div>
+
+        <div className="relative mx-auto w-72 h-72 sm:w-80 sm:h-80">
+          {/* Pointer at the top */}
+          <div
+            className="absolute left-1/2 -translate-x-1/2 -top-1 z-20"
+            style={{ filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.5))" }}
+          >
+            <div
+              className="w-0 h-0"
+              style={{
+                borderLeft: "14px solid transparent",
+                borderRight: "14px solid transparent",
+                borderTop: "22px solid white",
+              }}
+            />
+          </div>
+
+          {/* Outer ring glow */}
+          <div className="absolute inset-0 rounded-full ring-4 ring-white/15 shadow-[0_0_60px_-10px_rgba(240,117,179,0.6)]" />
+
+          {/* Spinning wheel */}
+          <div
+            className="absolute inset-1 rounded-full overflow-hidden"
+            style={{
+              background: `conic-gradient(from 0deg, ${conicStops})`,
+              transform: `rotate(${rotation}deg)`,
+              transition:
+                phase === "spinning"
+                  ? `transform ${SPIN_MS}ms cubic-bezier(0.15, 0.7, 0.15, 1)`
+                  : "none",
+              willChange: "transform",
+            }}
+          >
+            {/* Slice dividers */}
+            {creators.map((_, i) => {
+              const angle = i * sliceAngle;
+              return (
+                <div
+                  key={`div-${i}`}
+                  className="absolute top-1/2 left-1/2 origin-top w-px bg-white/30 pointer-events-none"
+                  style={{
+                    height: "50%",
+                    transform: `translate(-50%, 0) rotate(${angle}deg)`,
+                  }}
+                />
+              );
+            })}
+            {/* Avatars positioned in each slice */}
+            {creators.map((c, i) => {
+              const center = i * sliceAngle + sliceAngle / 2;
+              const rad = ((center - 90) * Math.PI) / 180;
+              const x = Math.cos(rad) * RADIUS;
+              const y = Math.sin(rad) * RADIUS;
+              return (
+                <div
+                  key={c.slug}
+                  className="absolute top-1/2 left-1/2 w-14 h-14 -ml-7 -mt-7"
+                  style={{ transform: `translate(${x}px, ${y}px)` }}
+                >
+                  <div className="w-full h-full rounded-full overflow-hidden ring-2 ring-white/90 shadow-lg bg-neutral-800">
+                    {c.photo ? (
+                      /* eslint-disable-next-line @next/next/no-img-element */
+                      <img
+                        src={c.photo}
+                        alt={c.name}
+                        className="w-full h-full object-cover"
+                        draggable={false}
+                      />
+                    ) : null}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Center hub */}
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-12 h-12 rounded-full bg-white shadow-[0_4px_18px_rgba(0,0,0,0.5)] grid place-items-center text-xl pointer-events-none">
+            🎁
+          </div>
+        </div>
+
+        {phase === "idle" && (
+          <button
+            onClick={spin}
+            className="w-full bg-gradient-pink text-white font-extrabold tracking-wide py-4 rounded-full text-base shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] hover:shadow-[0_12px_36px_-4px_rgba(240,117,179,0.8)] active:scale-[0.98] transition-all uppercase"
+          >
+            SPIN
+          </button>
+        )}
+
+        {phase === "spinning" && (
+          <p className="text-sm text-neutral-400 animate-pulse">spinning…</p>
+        )}
+
+        {phase === "result" && winner && (
+          <WheelResult creator={winner} onContinue={() => onResult(winner.slug)} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function WheelResult({
+  creator,
+  onContinue,
+}: {
+  creator: Creator;
+  onContinue: () => void;
+}) {
+  return (
+    <div className="space-y-4 animate-[fadeIn_500ms_ease-out]">
+      <div className="rounded-2xl border border-[#4ade80]/40 bg-[#4ade80]/10 p-5 space-y-2">
+        <div className="text-2xl">🎉</div>
+        <p className="text-base font-bold">
+          Free trial unlocked with{" "}
+          <span className="text-[#4ade80]">{creator.name}</span>
+        </p>
+        <p className="text-xs text-neutral-300 leading-relaxed">
+          Your free trial activates the moment you open her page. No card
+          needed to start chatting.
+        </p>
+      </div>
+      <button
+        onClick={onContinue}
+        className="w-full bg-gradient-pink text-white font-bold py-4 rounded-full text-base shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] active:scale-[0.98] transition-all"
+      >
+        Continue with {creator.name} →
+      </button>
+    </div>
+  );
+}
+
+/**
  * Tinder-style "It's a match!" celebration. Sits between the swipe deck and
  * the chat-prep quiz to make the funnel feel like meeting an actual person —
  * reciprocity ("she liked you back") + a tactile gear shift from browsing
@@ -840,8 +1075,12 @@ function Prep({
               Just an email — takes about 30 seconds. No card required to
               create your account.
             </PrepStep>
-            <PrepStep number={2} title={`Land on ${creator.name}'s page`}>
-              Your style and chat preferences are saved and waiting.
+            <PrepStep
+              number={2}
+              title={`Land on ${creator.name}'s page — free trial active`}
+            >
+              Your free trial activates automatically. No card needed to
+              start chatting.
             </PrepStep>
             <PrepStep number={3} title="Start the conversation">
               Send her your first message — she&apos;s online now.
