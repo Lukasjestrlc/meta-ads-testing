@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CREATORS, type Creator } from "@/data/creators";
 import CreatorCard from "./CreatorCard";
 import Stage from "./Stage";
@@ -224,79 +224,221 @@ function Swiping({
   onComplete: (likedSlugs: string[]) => void;
 }) {
   const [index, setIndex] = useState(0);
-  const [dragX, setDragX] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [exitDir, setExitDir] = useState<"left" | "right" | null>(null);
-  const startX = useRef(0);
-  const likesRef = useRef<string[]>([]);
+
+  // Refs drive the visual state during a drag — we never call setState on
+  // pointermove, since each setState triggers a re-render and that's what
+  // makes the gesture feel laggy. Instead we mutate the DOM directly inside
+  // a requestAnimationFrame, then only sync React state at gesture-end.
   const cardRef = useRef<HTMLDivElement>(null);
+  const nextCardRef = useRef<HTMLDivElement>(null);
+  const likeStampRef = useRef<HTMLDivElement>(null);
+  const skipStampRef = useRef<HTMLDivElement>(null);
+
+  const dragXRef = useRef(0);
+  const isDraggingRef = useRef(false);
+  const lockedRef = useRef(false); // true while exit animation runs
+  const startXRef = useRef(0);
+  const lastXRef = useRef(0);
+  const lastTRef = useRef(0);
+  const velocityRef = useRef(0); // px/ms
+  const rafRef = useRef<number | null>(null);
+  const likesRef = useRef<string[]>([]);
 
   const current: Creator | undefined = CREATORS[index];
   const next: Creator | undefined = CREATORS[index + 1];
 
-  function startDrag(clientX: number, pointerId?: number) {
-    if (exitDir) return;
-    if (pointerId !== undefined) {
-      cardRef.current?.setPointerCapture(pointerId);
+  // Snap-back uses ease-out-expo — very fast deceleration, feels tactile.
+  const SNAP = "cubic-bezier(0.16, 1, 0.3, 1)";
+  const FLING = "cubic-bezier(0.32, 0.72, 0, 1)";
+
+  function paint() {
+    rafRef.current = null;
+    const card = cardRef.current;
+    if (!card) return;
+    const dx = dragXRef.current;
+    card.style.transform = `translate3d(${dx}px, 0, 0) rotate(${dx / 18}deg)`;
+
+    if (likeStampRef.current) {
+      likeStampRef.current.style.opacity = String(
+        Math.max(0, Math.min(1, dx / 100))
+      );
     }
-    setIsDragging(true);
-    startX.current = clientX;
-  }
+    if (skipStampRef.current) {
+      skipStampRef.current.style.opacity = String(
+        Math.max(0, Math.min(1, -dx / 100))
+      );
+    }
 
-  function moveDrag(clientX: number) {
-    if (!isDragging || exitDir) return;
-    setDragX(clientX - startX.current);
-  }
-
-  function endDrag() {
-    if (!isDragging) return;
-    setIsDragging(false);
-    const threshold = 100;
-    if (dragX > threshold) {
-      goNext("right");
-    } else if (dragX < -threshold) {
-      goNext("left");
-    } else {
-      setDragX(0);
+    // Next card peeks up as the active card moves away — gives the stack
+    // that subtle "rising into place" depth Tinder has.
+    if (nextCardRef.current) {
+      const progress = Math.min(1, Math.abs(dx) / 100);
+      nextCardRef.current.style.transform = `scale(${0.95 + progress * 0.04})`;
+      nextCardRef.current.style.opacity = String(0.6 + progress * 0.3);
     }
   }
 
-  function goNext(dir: "left" | "right") {
-    if (!current || exitDir) return;
-    setExitDir(dir);
+  function schedulePaint() {
+    if (rafRef.current != null) return;
+    rafRef.current = requestAnimationFrame(paint);
+  }
+
+  function resetCardStyles(immediate: boolean) {
+    const card = cardRef.current;
+    if (card) {
+      card.style.transition = immediate ? "none" : `transform 200ms ${SNAP}`;
+      card.style.transform = "translate3d(0,0,0) rotate(0deg)";
+    }
+    if (likeStampRef.current) {
+      likeStampRef.current.style.transition = immediate
+        ? "none"
+        : "opacity 160ms ease-out";
+      likeStampRef.current.style.opacity = "0";
+    }
+    if (skipStampRef.current) {
+      skipStampRef.current.style.transition = immediate
+        ? "none"
+        : "opacity 160ms ease-out";
+      skipStampRef.current.style.opacity = "0";
+    }
+    if (nextCardRef.current) {
+      nextCardRef.current.style.transition = immediate
+        ? "none"
+        : `transform 200ms ${SNAP}, opacity 200ms ease-out`;
+      nextCardRef.current.style.transform = "scale(0.95)";
+      nextCardRef.current.style.opacity = "0.6";
+    }
+  }
+
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (lockedRef.current) return;
+    cardRef.current?.setPointerCapture(e.pointerId);
+    isDraggingRef.current = true;
+    startXRef.current = e.clientX;
+    lastXRef.current = e.clientX;
+    lastTRef.current = performance.now();
+    velocityRef.current = 0;
+    dragXRef.current = 0;
+    // Kill any in-flight transitions so the drag tracks the finger 1:1.
+    if (cardRef.current) cardRef.current.style.transition = "none";
+    if (likeStampRef.current) likeStampRef.current.style.transition = "none";
+    if (skipStampRef.current) skipStampRef.current.style.transition = "none";
+    if (nextCardRef.current) nextCardRef.current.style.transition = "none";
+  }
+
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!isDraggingRef.current || lockedRef.current) return;
+    const dx = e.clientX - startXRef.current;
+    dragXRef.current = dx;
+
+    const now = performance.now();
+    const dt = now - lastTRef.current;
+    if (dt > 0) {
+      // Light low-pass filter so a single jitter sample doesn't dominate.
+      const instant = (e.clientX - lastXRef.current) / dt;
+      velocityRef.current = velocityRef.current * 0.6 + instant * 0.4;
+    }
+    lastXRef.current = e.clientX;
+    lastTRef.current = now;
+
+    schedulePaint();
+  }
+
+  function onPointerUp() {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+
+    const dx = dragXRef.current;
+    const v = velocityRef.current;
+    const distanceThreshold = 100;
+    const velocityThreshold = 0.6; // a quick flick triggers even at low distance
+
+    let dir: "left" | "right" | null = null;
+    if (dx > distanceThreshold || v > velocityThreshold) dir = "right";
+    else if (dx < -distanceThreshold || v < -velocityThreshold) dir = "left";
+
+    if (dir) flingOut(dir);
+    else resetCardStyles(false);
+  }
+
+  function onPointerCancel() {
+    isDraggingRef.current = false;
+    dragXRef.current = 0;
+    resetCardStyles(false);
+  }
+
+  function flingOut(dir: "left" | "right") {
+    if (!current || lockedRef.current) return;
+    lockedRef.current = true;
+
+    const card = cardRef.current;
+    if (card) {
+      const exitX =
+        dir === "right"
+          ? Math.max(window.innerWidth, 700) + 100
+          : -Math.max(window.innerWidth, 700) - 100;
+      const exitRot = dir === "right" ? 25 : -25;
+      card.style.transition = `transform 280ms ${FLING}, opacity 220ms ease-out`;
+      card.style.transform = `translate3d(${exitX}px, 0, 0) rotate(${exitRot}deg)`;
+      card.style.opacity = "0";
+    }
+    // Lock the next card at depth during exit. Previously it rose to
+    // scale(1)/opacity(1) and then had to snap back to scale(0.95)/opacity(0.6)
+    // when the swap happened — that visible "settle back" was the animation
+    // the user didn't like. Holding it at depth means the new active card
+    // just appears at the front, no rebound.
+    if (nextCardRef.current) {
+      nextCardRef.current.style.transition = "transform 200ms ease-out, opacity 200ms ease-out";
+      nextCardRef.current.style.transform = "scale(0.95)";
+      nextCardRef.current.style.opacity = "0.6";
+    }
+    if (likeStampRef.current) {
+      likeStampRef.current.style.transition = "opacity 180ms ease-out";
+      likeStampRef.current.style.opacity = dir === "right" ? "1" : "0";
+    }
+    if (skipStampRef.current) {
+      skipStampRef.current.style.transition = "opacity 180ms ease-out";
+      skipStampRef.current.style.opacity = dir === "left" ? "1" : "0";
+    }
 
     if (dir === "right") {
       // First like ends the deck and pushes the visitor into the quiz
-      // → loading → redirect funnel for that specific creator. No need to
-      // make them swipe through everyone before a conversion path kicks in.
+      // → loading → redirect funnel for that specific creator.
       likesRef.current = [...likesRef.current, current.slug];
-      setTimeout(() => onComplete(likesRef.current), 350);
+      window.setTimeout(() => onComplete(likesRef.current), 240);
       return;
     }
 
-    // Skip → advance to the next card, or end deck if we're out of cards.
-    setTimeout(() => {
+    window.setTimeout(() => {
       const nextIndex = index + 1;
       if (nextIndex >= CREATORS.length) {
         onComplete(likesRef.current);
       } else {
         setIndex(nextIndex);
-        setDragX(0);
-        setExitDir(null);
+        // lockedRef is cleared in the layout effect below, after the new
+        // card's transform is reset back to the start position.
       }
-    }, 350);
+    }, 240);
   }
 
+  // When index advances, we have to snap the active card's DOM back to its
+  // resting position *before paint* so the new creator doesn't flash in at
+  // the previous card's exit translation. useLayoutEffect runs synchronously
+  // after DOM mutations and before the browser paints.
+  useLayoutEffect(() => {
+    dragXRef.current = 0;
+    if (cardRef.current) cardRef.current.style.opacity = "1";
+    resetCardStyles(true);
+    lockedRef.current = false;
+  }, [index]);
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
   if (!current) return null;
-
-  const rotation =
-    exitDir === "left" ? -25 : exitDir === "right" ? 25 : dragX / 18;
-  const translateX =
-    exitDir === "left" ? -700 : exitDir === "right" ? 700 : dragX;
-  const opacity = exitDir ? 0 : 1;
-
-  const likeOpacity = Math.max(0, Math.min(1, dragX / 100));
-  const skipOpacity = Math.max(0, Math.min(1, -dragX / 100));
 
   return (
     <div className="min-h-screen flex flex-col px-5 py-6">
@@ -318,13 +460,22 @@ function Swiping({
         <div className="relative flex-1 min-h-[460px] mb-5">
           {/* Next card (depth) */}
           {next && (
-            <div className="absolute inset-0 rounded-3xl overflow-hidden bg-neutral-900 ring-1 ring-white/10 scale-95 opacity-60">
+            <div
+              ref={nextCardRef}
+              className="absolute inset-0 rounded-3xl overflow-hidden bg-neutral-900 ring-1 ring-white/10"
+              style={{
+                transform: "scale(0.95)",
+                opacity: 0.6,
+                willChange: "transform, opacity",
+              }}
+            >
               {next.photo && (
                 /* eslint-disable-next-line @next/next/no-img-element */
                 <img
                   src={next.photo}
                   alt=""
                   className="absolute inset-0 w-full h-full object-cover"
+                  draggable={false}
                 />
               )}
               <div className="absolute inset-0 bg-black/20" />
@@ -336,20 +487,14 @@ function Swiping({
             ref={cardRef}
             className="absolute inset-0 rounded-3xl overflow-hidden bg-neutral-900 ring-1 ring-white/15 shadow-[0_20px_50px_-12px_rgba(0,0,0,0.7)] cursor-grab active:cursor-grabbing select-none"
             style={{
-              transform: `translateX(${translateX}px) rotate(${rotation}deg)`,
-              transition: isDragging
-                ? "none"
-                : "transform 350ms ease-out, opacity 300ms ease-out",
-              opacity,
+              transform: "translate3d(0,0,0) rotate(0deg)",
               touchAction: "pan-y",
+              willChange: "transform",
             }}
-            onPointerDown={(e) => startDrag(e.clientX, e.pointerId)}
-            onPointerMove={(e) => moveDrag(e.clientX)}
-            onPointerUp={endDrag}
-            onPointerCancel={() => {
-              setIsDragging(false);
-              setDragX(0);
-            }}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerCancel}
           >
             {current.photo ? (
               /* eslint-disable-next-line @next/next/no-img-element */
@@ -363,19 +508,21 @@ function Swiping({
               <div className="absolute inset-0 bg-gradient-to-br from-neutral-700 to-neutral-900" />
             )}
 
-            <div className="absolute inset-x-0 top-0 h-1/4 bg-gradient-to-b from-black/50 to-transparent" />
-            <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/95 via-black/55 to-transparent" />
+            <div className="absolute inset-x-0 top-0 h-1/4 bg-gradient-to-b from-black/50 to-transparent pointer-events-none" />
+            <div className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/95 via-black/55 to-transparent pointer-events-none" />
 
             {/* LIKE / SKIP stamps */}
             <div
-              className="absolute top-10 right-6 text-[#4ade80] border-[3px] border-[#4ade80] rounded-2xl px-4 py-1.5 text-2xl font-extrabold rotate-12 pointer-events-none transition-opacity tracking-wider"
-              style={{ opacity: likeOpacity }}
+              ref={likeStampRef}
+              className="absolute top-10 right-6 text-[#4ade80] border-[3px] border-[#4ade80] rounded-2xl px-4 py-1.5 text-2xl font-extrabold rotate-12 pointer-events-none tracking-wider"
+              style={{ opacity: 0, willChange: "opacity" }}
             >
               LIKE
             </div>
             <div
-              className="absolute top-10 left-6 text-red-400 border-[3px] border-red-400 rounded-2xl px-4 py-1.5 text-2xl font-extrabold -rotate-12 pointer-events-none transition-opacity tracking-wider"
-              style={{ opacity: skipOpacity }}
+              ref={skipStampRef}
+              className="absolute top-10 left-6 text-red-400 border-[3px] border-red-400 rounded-2xl px-4 py-1.5 text-2xl font-extrabold -rotate-12 pointer-events-none tracking-wider"
+              style={{ opacity: 0, willChange: "opacity" }}
             >
               SKIP
             </div>
@@ -419,16 +566,14 @@ function Swiping({
         {/* Action buttons */}
         <div className="flex items-center justify-center gap-5 pb-4">
           <button
-            onClick={() => goNext("left")}
-            disabled={!!exitDir}
+            onClick={() => flingOut("left")}
             aria-label="Skip"
             className="w-14 h-14 rounded-full bg-white/[0.06] border border-white/15 backdrop-blur-md text-red-400 text-2xl font-bold hover:scale-105 hover:border-red-400/60 active:scale-95 transition-all disabled:opacity-50"
           >
             ✕
           </button>
           <button
-            onClick={() => goNext("right")}
-            disabled={!!exitDir}
+            onClick={() => flingOut("right")}
             aria-label="Like"
             className="w-20 h-20 rounded-full bg-gradient-pink text-white text-3xl shadow-[0_8px_28px_-4px_rgba(240,117,179,0.6)] hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
           >
