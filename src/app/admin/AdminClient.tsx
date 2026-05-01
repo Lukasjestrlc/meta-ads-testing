@@ -162,6 +162,12 @@ export default function AdminClient({
           </div>
           <div className="flex items-center gap-3">
             <a
+              href="/admin/stats"
+              className="text-xs text-neutral-400 hover:text-white transition-colors"
+            >
+              Stats →
+            </a>
+            <a
               href="/"
               target="_blank"
               rel="noreferrer"

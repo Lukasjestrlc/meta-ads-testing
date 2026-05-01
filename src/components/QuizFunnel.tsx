@@ -31,6 +31,27 @@ function firePixel(event: string, params?: Record<string, unknown>) {
   fbq("trackSingle", PIXEL_ID, event, params);
 }
 
+/**
+ * Logs a funnel event to our internal counter API, used by /admin/stats.
+ * Fire-and-forget — failures are silent so analytics never blocks UX.
+ * `keepalive` ensures the request still completes if the user navigates
+ * away (critical for the Fanvue-redirect tracker, which fires immediately
+ * before the navigation).
+ */
+function trackInternal(event: string, slug?: string) {
+  if (typeof window === "undefined") return;
+  try {
+    fetch("/api/events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event, slug }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    /* no-op — analytics must never break the funnel */
+  }
+}
+
 export default function QuizFunnel({ creators }: { creators: Creator[] }) {
   const [step, setStep] = useState<Step>({ kind: "intro" });
   const [likes, setLikes] = useState<string[]>([]);
@@ -64,6 +85,10 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
     const total = matchedStages.reduce((sum, s) => sum + s.duration, 0);
     const t = setTimeout(() => {
       if (firstLiked) {
+        // Final-step counter logged just before navigation so we can compute
+        // the prep_continue → fanvue_redirect rate (post-redirect events
+        // can't fire from this origin).
+        trackInternal("fanvue_redirect", firstLiked);
         window.location.href = `/go?slug=${encodeURIComponent(firstLiked)}`;
       } else {
         // Defensive fallback — shouldn't reach here, but if no likes, show results.
@@ -78,6 +103,7 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
       content_name: "started_swiping",
       content_category: "creator_match",
     });
+    trackInternal("started_swiping");
     setStep({ kind: "swiping" });
   }
 
@@ -88,6 +114,7 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
       content_category: "creator_match",
       num_liked: likedSlugs.length,
     });
+    trackInternal("swipe_complete");
     if (likedSlugs.length >= 2) {
       // Multiple matches → spin-the-wheel decides which one unlocks his free
       // trial. Adds a dopamine moment + makes the picked creator feel earned.
@@ -107,6 +134,7 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
       content_category: "creator_match",
       content_ids: [slug],
     });
+    trackInternal("wheel_result", slug);
     // Reorder likes so the wheel's winner becomes the target creator (likes[0]).
     setLikes((prev) => [slug, ...prev.filter((s) => s !== slug)]);
     setStep({ kind: "match" });
@@ -117,6 +145,7 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
       content_name: "match_continue",
       content_category: "creator_match",
     });
+    trackInternal("match_continue", targetCreator.slug);
     // Quiz step was removed — the wheel + match screen already do the
     // commitment work, so we go straight to the prep step that sets up
     // the Fanvue signup expectation.
@@ -128,6 +157,7 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
       content_name: "prep_continue",
       content_category: "creator_match",
     });
+    trackInternal("prep_continue");
     setStep({ kind: "matchedLoading" });
   }
 
@@ -651,6 +681,7 @@ function Wheel({
       content_name: "wheel_spin",
       content_category: "creator_match",
     });
+    trackInternal("wheel_spin");
 
     setWinnerIdx(winner);
     setRotation(final);
