@@ -43,6 +43,14 @@ Two ways:
 Set `NEXT_PUBLIC_META_PIXEL_ID` in Vercel → Settings → Environment Variables.
 You can swap pixels at any time; no code change.
 
+## Behavior analytics
+
+Set `NEXT_PUBLIC_CLARITY_ID` to a Microsoft Clarity project ID and the
+public site loads Clarity's tracker. You'll get session replays, heatmaps,
+and rage-click insights at https://clarity.microsoft.com — free,
+unlimited, GDPR-friendly. Useful for actually *seeing* where visitors get
+stuck (vs Pixel which only counts events).
+
 ## Admin section
 
 The admin lives at `/admin` and is locked behind a password. To enable

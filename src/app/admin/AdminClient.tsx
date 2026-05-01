@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import { ACTIVITY_OPTIONS, type Creator } from "@/data/creators";
 import {
   logoutAction,
@@ -52,23 +52,53 @@ export default function AdminClient({
   storeConfigured: boolean;
 }) {
   const [drafts, setDrafts] = useState<Draft[]>(() => initial.map(toDraft));
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [search, setSearch] = useState("");
   const [feedback, setFeedback] = useState<{
     kind: "ok" | "err";
     msg: string;
   } | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const visibleDrafts = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return drafts;
+    return drafts.filter(
+      (d) =>
+        d.name.toLowerCase().includes(q) ||
+        d.slug.toLowerCase().includes(q) ||
+        d.bio.toLowerCase().includes(q)
+    );
+  }, [drafts, search]);
+
+  function toggleExpanded(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   function update(id: string, patch: Partial<Creator>) {
     setDrafts((d) => d.map((c) => (c._id === id ? { ...c, ...patch } : c)));
   }
 
   function add() {
-    setDrafts((d) => [...d, blankCreator()]);
+    const fresh = blankCreator();
+    setDrafts((d) => [fresh, ...d]); // newcomers appear at the top
+    setExpanded((prev) => new Set([fresh._id, ...prev])); // and start expanded
+    setSearch(""); // clear filter so they're visible
   }
 
   function remove(id: string) {
     if (!confirm("Delete this creator?")) return;
     setDrafts((d) => d.filter((c) => c._id !== id));
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
   }
 
   function move(id: string, dir: -1 | 1) {
@@ -167,35 +197,58 @@ export default function AdminClient({
           </div>
         )}
 
-        <div className="flex items-end justify-between gap-3">
+        <div className="flex items-end justify-between gap-3 flex-wrap">
           <div>
             <h1 className="text-3xl font-extrabold tracking-tight">Creators</h1>
             <p className="text-sm text-neutral-400 mt-1">
-              {drafts.length} {drafts.length === 1 ? "creator" : "creators"} ·
-              edits go live within seconds of saving
+              {drafts.length} {drafts.length === 1 ? "creator" : "creators"}
+              {search.trim() &&
+                drafts.length !== visibleDrafts.length &&
+                ` · ${visibleDrafts.length} match search`}
+              {" · edits go live ~30–60s after saving"}
             </p>
           </div>
           <button
             onClick={add}
-            className="bg-white/[0.06] border border-white/15 rounded-full px-4 py-2 text-sm font-bold hover:bg-white/[0.1] active:scale-95 transition-all"
+            className="bg-gradient-pink text-white rounded-full px-4 py-2 text-sm font-bold shadow-[0_4px_18px_-4px_rgba(240,117,179,0.6)] active:scale-95 transition-all"
           >
             + Add creator
           </button>
         </div>
 
-        <div className="space-y-5">
-          {drafts.map((draft, i) => (
-            <CreatorEditor
-              key={draft._id}
-              draft={draft}
-              index={i}
-              total={drafts.length}
-              onChange={(patch) => update(draft._id, patch)}
-              onRemove={() => remove(draft._id)}
-              onMoveUp={() => move(draft._id, -1)}
-              onMoveDown={() => move(draft._id, 1)}
+        {drafts.length > 3 && (
+          <div className="relative">
+            <input
+              type="search"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Filter by name, slug, or bio…"
+              className="w-full bg-white/[0.04] border border-white/10 focus:border-white/25 focus:outline-none rounded-2xl pl-10 pr-4 py-2.5 text-sm placeholder:text-white/30"
             />
-          ))}
+            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 text-sm">
+              ⌕
+            </span>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          {visibleDrafts.map((draft) => {
+            const i = drafts.findIndex((d) => d._id === draft._id);
+            return (
+              <CreatorEditor
+                key={draft._id}
+                draft={draft}
+                index={i}
+                total={drafts.length}
+                expanded={expanded.has(draft._id)}
+                onToggle={() => toggleExpanded(draft._id)}
+                onChange={(patch) => update(draft._id, patch)}
+                onRemove={() => remove(draft._id)}
+                onMoveUp={() => move(draft._id, -1)}
+                onMoveDown={() => move(draft._id, 1)}
+              />
+            );
+          })}
         </div>
 
         {drafts.length === 0 && (
@@ -207,6 +260,16 @@ export default function AdminClient({
             >
               reset to the default list
             </button>
+            .
+          </div>
+        )}
+
+        {drafts.length > 0 && visibleDrafts.length === 0 && (
+          <div className="text-center py-12 text-sm text-neutral-500">
+            No creators match{" "}
+            <span className="font-mono text-white/70">
+              &ldquo;{search}&rdquo;
+            </span>
             .
           </div>
         )}
@@ -251,6 +314,8 @@ function CreatorEditor({
   draft,
   index,
   total,
+  expanded,
+  onToggle,
   onChange,
   onRemove,
   onMoveUp,
@@ -259,29 +324,57 @@ function CreatorEditor({
   draft: Draft;
   index: number;
   total: number;
+  expanded: boolean;
+  onToggle: () => void;
   onChange: (patch: Partial<Creator>) => void;
   onRemove: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-white/10 bg-white/[0.02]">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className="text-[11px] font-bold tracking-wider uppercase text-white/40 tabular-nums">
-            #{index + 1}
-          </span>
-          <span className="text-sm font-bold truncate">
-            {draft.name || draft.slug || "(untitled)"}
-          </span>
-        </div>
-        <div className="flex items-center gap-1">
+    <div
+      className={`rounded-2xl border transition-colors ${
+        expanded
+          ? "border-[hsl(330_80%_70%)]/40 bg-white/[0.04]"
+          : "border-white/10 bg-white/[0.02] hover:border-white/20"
+      }`}
+    >
+      {/* Compact row — always visible, click to toggle */}
+      <div className="flex items-center gap-3 px-3 py-3">
+        <button
+          type="button"
+          onClick={onToggle}
+          className="flex items-center gap-3 flex-1 min-w-0 text-left"
+          aria-expanded={expanded}
+        >
+          <Thumb url={draft.photo} hasVideo={!!draft.video} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-baseline gap-1.5">
+              <span className="text-sm font-bold truncate">
+                {draft.name || (
+                  <span className="text-white/40 italic">(untitled)</span>
+                )}
+              </span>
+              {draft.age ? (
+                <span className="text-xs text-white/50 flex-shrink-0">
+                  · {draft.age}
+                </span>
+              ) : null}
+            </div>
+            <div className="text-[11px] text-neutral-400 truncate">
+              {draft.activity || "Random activity"}
+              {draft.video ? " · 🎥 video" : ""}
+            </div>
+          </div>
+        </button>
+
+        <div className="flex items-center gap-0.5 flex-shrink-0">
           <button
             type="button"
             onClick={onMoveUp}
             disabled={index === 0}
             aria-label="Move up"
-            className="w-8 h-8 rounded-full hover:bg-white/[0.06] disabled:opacity-30 transition-colors text-sm"
+            className="w-7 h-7 rounded-full hover:bg-white/[0.08] disabled:opacity-30 transition-colors text-xs"
           >
             ↑
           </button>
@@ -290,23 +383,25 @@ function CreatorEditor({
             onClick={onMoveDown}
             disabled={index === total - 1}
             aria-label="Move down"
-            className="w-8 h-8 rounded-full hover:bg-white/[0.06] disabled:opacity-30 transition-colors text-sm"
+            className="w-7 h-7 rounded-full hover:bg-white/[0.08] disabled:opacity-30 transition-colors text-xs"
           >
             ↓
           </button>
           <button
             type="button"
-            onClick={onRemove}
-            aria-label="Delete"
-            className="w-8 h-8 rounded-full hover:bg-red-500/20 text-red-400 transition-colors text-sm"
+            onClick={onToggle}
+            aria-label={expanded ? "Collapse" : "Expand"}
+            className="w-7 h-7 rounded-full hover:bg-white/[0.08] transition-colors text-xs text-white/60"
           >
-            ✕
+            {expanded ? "▴" : "▾"}
           </button>
         </div>
       </div>
 
-      <div className="px-5 py-5 grid grid-cols-1 sm:grid-cols-[120px_1fr] gap-5">
-        <PhotoPreview url={draft.photo} />
+      {/* Body — only when expanded */}
+      {expanded ? (
+        <div className="border-t border-white/10 px-5 py-5 grid grid-cols-1 sm:grid-cols-[120px_1fr] gap-5">
+          <PhotoPreview url={draft.photo} />
 
         <div className="space-y-3 min-w-0">
           <Row>
@@ -384,13 +479,48 @@ function CreatorEditor({
             </select>
           </Field>
 
-          <p className="text-[10px] text-neutral-500 pt-1">
-            Slug:{" "}
-            <span className="font-mono text-neutral-400">{draft.slug}</span>
-            {" "}· auto-generated
-          </p>
+          <div className="flex items-center justify-between gap-3 pt-3 border-t border-white/10 flex-wrap">
+            <p className="text-[10px] text-neutral-500">
+              Slug:{" "}
+              <span className="font-mono text-neutral-400">{draft.slug}</span>
+              {" "}· auto-generated
+            </p>
+            <button
+              type="button"
+              onClick={onRemove}
+              className="text-xs text-red-400 hover:text-red-300 hover:underline transition-colors"
+            >
+              Delete creator
+            </button>
+          </div>
         </div>
       </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Thumb({ url, hasVideo }: { url: string | null; hasVideo: boolean }) {
+  return (
+    <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-white/[0.04] border border-white/10 flex-shrink-0 grid place-items-center text-[8px] text-neutral-500">
+      {url ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img
+          src={url}
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).style.display = "none";
+          }}
+        />
+      ) : (
+        "no photo"
+      )}
+      {hasVideo && (
+        <span className="absolute bottom-0.5 right-0.5 text-[9px] bg-black/70 rounded px-1">
+          ▶
+        </span>
+      )}
     </div>
   );
 }
