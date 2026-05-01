@@ -194,7 +194,7 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
   }
 
   return (
-    <Stage>
+    <Stage creators={creators}>
       {step.kind === "intro" && <Intro onStart={start} />}
       {step.kind === "swiping" && (
         <Swiping creators={creators} onComplete={onSwipeComplete} />
