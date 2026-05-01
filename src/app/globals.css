@@ -86,3 +86,18 @@ body {
     transform: translate3d(5%, -10%, 0) scale(1.08);
   }
 }
+
+/* Ken Burns: each background photo slowly zooms + pans, alternating so it
+   never sits still. Stage gives each tile a randomized delay so they don't
+   move in sync. Keeps the photo wall feeling alive. */
+@keyframes kenburns {
+  0% {
+    transform: scale(1.05) translate(0%, 0%);
+  }
+  50% {
+    transform: scale(1.18) translate(-2%, -1%);
+  }
+  100% {
+    transform: scale(1.05) translate(2%, 1%);
+  }
+}
