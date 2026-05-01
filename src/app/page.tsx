@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import HomepagePixel from "@/components/HomepagePixel";
 import QuizFunnel from "@/components/QuizFunnel";
 import { loadCreators } from "@/lib/creatorStore";
@@ -8,8 +9,11 @@ export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const creators = await loadCreators();
-  // Fire-and-forget pageview counter for /admin/stats. Doesn't block render.
-  void trackEvent("page_view");
+
+  // Counter increment runs after the response is sent so it doesn't add
+  // latency — but unlike `void` fire-and-forget, Vercel's runtime keeps
+  // the function alive long enough for `after` work to finish.
+  after(() => trackEvent("page_view"));
 
   return (
     <>
