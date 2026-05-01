@@ -14,36 +14,50 @@ type Step =
   | { kind: "matchedLoading" }
   | { kind: "results" };
 
-const QUESTIONS: { title: string; subtitle?: string; options: string[] }[] = [
-  {
-    title: "Quick — what&apos;s your style?",
-    subtitle: "Helps us pick the right one to connect you with.",
-    options: ["Chill & cozy", "Outdoorsy & fitness", "Artsy & alt", "Glam & fashion"],
-  },
-  {
-    title: "What kind of energy are you into?",
-    options: [
-      "Sweet & wholesome",
-      "Funny & playful",
-      "Bold & confident",
-      "Calm & mysterious",
-    ],
-  },
-  {
-    title: "How often do you usually message?",
-    options: ["All day", "Few times a day", "Once a day", "Now and then"],
-  },
-  {
-    title: "Last thing — what do you like most?",
-    options: ["Photos", "Short videos", "Stories", "Lives"],
-  },
-];
+// Quiz is shaped around commitment escalation: small early "yes," personal
+// detail in the middle, opener-pick at the end (commits the user to a
+// specific message they'll feel pressure to actually send when they land).
+function buildQuestions(name: string) {
+  return [
+    {
+      title: `${name} liked you back 💗`,
+      subtitle: "Quick — what's your conversation style?",
+      options: ["Sweet & playful", "Flirty & bold", "Funny & casual", "Quiet & deep"],
+    },
+    {
+      title: "When are you usually free to chat?",
+      subtitle: `${name} will know when to expect you.`,
+      options: ["Mornings", "Afternoons", "Evenings", "Late night"],
+    },
+    {
+      title: "What gets you in the mood to message?",
+      options: [
+        "Real conversations",
+        "Spicy banter",
+        "Sweet compliments",
+        "Spontaneous flirting",
+      ],
+    },
+    {
+      title: `Last one — pick your opener for ${name}`,
+      subtitle: "First impressions matter. Tap the one that feels right.",
+      options: [
+        `Hey ${name} — couldn't scroll past you`,
+        "I love your vibe, tell me about yourself",
+        "You'll have to surprise me 😉",
+        "Pick the perfect line for me",
+      ],
+    },
+  ];
+}
 
-const MATCHED_STAGES = [
-  { label: "Reviewing the people you liked…", duration: 900 },
-  { label: "Finding your strongest match…", duration: 1100 },
-  { label: "Opening her profile…", duration: 800 },
-];
+function buildMatchedStages(name: string) {
+  return [
+    { label: `Letting ${name} know you're on your way…`, duration: 900 },
+    { label: "Saving your opener…", duration: 1100 },
+    { label: `Opening chat with ${name}…`, duration: 800 },
+  ];
+}
 
 function firePixel(event: string, params?: Record<string, unknown>) {
   if (typeof window === "undefined") return;
@@ -56,7 +70,14 @@ export default function QuizFunnel() {
   const [step, setStep] = useState<Step>({ kind: "intro" });
   const [likes, setLikes] = useState<string[]>([]);
 
-  // Auto-advance from "Confirming your matches…" → redirect (or fallback results)
+  // The quiz and loading copy are personalized to the first creator the user
+  // liked — this is the one we'll redirect them to. If somehow likes is empty
+  // we fall back to the first creator just so the strings have a name.
+  const targetCreator =
+    CREATORS.find((c) => c.slug === likes[0]) ?? CREATORS[0];
+  const questions = buildQuestions(targetCreator.name);
+  const matchedStages = buildMatchedStages(targetCreator.name);
+
   useEffect(() => {
     if (step.kind !== "matchedLoading") return;
 
@@ -76,7 +97,7 @@ export default function QuizFunnel() {
       }
     }
 
-    const total = MATCHED_STAGES.reduce((sum, s) => sum + s.duration, 0);
+    const total = matchedStages.reduce((sum, s) => sum + s.duration, 0);
     const t = setTimeout(() => {
       if (firstLiked) {
         window.location.href = `/go?slug=${encodeURIComponent(firstLiked)}`;
@@ -86,7 +107,7 @@ export default function QuizFunnel() {
       }
     }, total);
     return () => clearTimeout(t);
-  }, [step.kind, likes]);
+  }, [step.kind, likes, matchedStages]);
 
   function start() {
     firePixel("Lead", {
@@ -104,7 +125,7 @@ export default function QuizFunnel() {
       num_liked: likedSlugs.length,
     });
     if (likedSlugs.length > 0) {
-      // They liked someone — run the quiz to confirm the match
+      // They liked at least one — run the personalized quiz before redirect.
       setStep({ kind: "question", index: 0 });
     } else {
       // Skipped everyone — show the grid so they can still pick one
@@ -115,7 +136,7 @@ export default function QuizFunnel() {
   function answer() {
     if (step.kind !== "question") return;
     const next = step.index + 1;
-    if (next < QUESTIONS.length) {
+    if (next < questions.length) {
       setStep({ kind: "question", index: next });
     } else {
       firePixel("Lead", {
@@ -134,17 +155,17 @@ export default function QuizFunnel() {
         <Question
           key={step.index}
           index={step.index}
-          total={QUESTIONS.length}
-          title={QUESTIONS[step.index].title}
-          subtitle={QUESTIONS[step.index].subtitle}
-          options={QUESTIONS[step.index].options}
+          total={questions.length}
+          title={questions[step.index].title}
+          subtitle={questions[step.index].subtitle}
+          options={questions[step.index].options}
           onSelect={answer}
         />
       )}
       {step.kind === "matchedLoading" && (
         <LoadingScreen
-          stages={MATCHED_STAGES}
-          finalLabel="Match request sent"
+          stages={matchedStages}
+          finalLabel="Chat ready"
         />
       )}
       {step.kind === "results" && <Results likes={likes} />}
@@ -402,13 +423,13 @@ function Swiping({
     }
 
     if (dir === "right") {
-      // First like ends the deck and pushes the visitor into the quiz
-      // → loading → redirect funnel for that specific creator.
       likesRef.current = [...likesRef.current, current.slug];
-      window.setTimeout(() => onComplete(likesRef.current), 240);
-      return;
     }
 
+    // Always advance to the next card — both like and skip move forward.
+    // The deck only ends once the user has been through every creator,
+    // which means they've made several yes/no decisions and are warmed up
+    // before the personalized quiz fires.
     window.setTimeout(() => {
       const nextIndex = index + 1;
       if (nextIndex >= CREATORS.length) {
