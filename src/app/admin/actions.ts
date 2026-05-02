@@ -11,7 +11,7 @@ import {
 } from "@/lib/adminAuth";
 import {
   isStoreConfigured,
-  loadCreators,
+  loadCreatorsFresh,
   savePhoto,
   saveCreators,
 } from "@/lib/creatorStore";
@@ -117,7 +117,7 @@ export async function resetToSeedAction(): Promise<SaveResult> {
 
 export async function getCreatorsForAdmin(): Promise<Creator[]> {
   await requireAdmin();
-  return loadCreators();
+  return loadCreatorsFresh();
 }
 
 export type UploadResult =

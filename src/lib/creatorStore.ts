@@ -43,6 +43,46 @@ export async function findCreatorBySlug(
   return all.find((c) => c.slug === slug) ?? null;
 }
 
+/**
+ * Fetches the live creator list directly from GitHub instead of the
+ * deployment's bundled file. Used by the admin so edits show up the
+ * instant a save commits — without waiting for Vercel to finish a 30–60s
+ * rebuild. Public-facing routes keep using loadCreators() (deployment-
+ * bundled) since visitors don't care about sub-minute freshness and the
+ * bundled read is faster.
+ *
+ * Falls back to the bundled version (and ultimately to the seed) on any
+ * GitHub failure so admin never shows a hard error for a transient blip.
+ */
+export async function loadCreatorsFresh(): Promise<Creator[]> {
+  if (!isStoreConfigured()) return loadCreators();
+  try {
+    const { repo, branch, token } = getGithubConfig();
+    const res = await fetch(
+      `https://api.github.com/repos/${repo}/contents/${REPO_PATH}?ref=${encodeURIComponent(branch)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: "application/vnd.github+json",
+          "User-Agent": "peach-club-admin",
+        },
+        cache: "no-store",
+      }
+    );
+    if (res.status === 404) return loadCreators();
+    if (!res.ok) return loadCreators();
+    const data = (await res.json()) as { content?: string };
+    if (!data.content) return loadCreators();
+    const decoded = Buffer.from(data.content, "base64").toString("utf-8");
+    const parsed = JSON.parse(decoded);
+    return Array.isArray(parsed) && parsed.length > 0
+      ? (parsed as Creator[])
+      : loadCreators();
+  } catch {
+    return loadCreators();
+  }
+}
+
 // ─── GitHub commit primitives ───
 
 function getGithubConfig() {

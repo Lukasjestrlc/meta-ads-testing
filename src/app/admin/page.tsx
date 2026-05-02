@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { loadCreators, isStoreConfigured } from "@/lib/creatorStore";
+import { isStoreConfigured, loadCreatorsFresh } from "@/lib/creatorStore";
 import AdminClient from "./AdminClient";
 
 export const metadata: Metadata = {
@@ -10,7 +10,9 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function AdminPage() {
-  const creators = await loadCreators();
+  // Read directly from GitHub instead of the deployment bundle so we never
+  // serve stale data while Vercel is mid-rebuild after a save.
+  const creators = await loadCreatorsFresh();
   const storeConfigured = isStoreConfigured();
   return (
     <AdminClient initial={creators} storeConfigured={storeConfigured} />

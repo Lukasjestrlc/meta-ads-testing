@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { loadCreators } from "@/lib/creatorStore";
+import { loadCreatorsFresh } from "@/lib/creatorStore";
 import {
   CREATOR_EVENTS,
   FUNNEL_EVENTS,
@@ -52,7 +52,7 @@ const CREATOR_EVENT_LABELS: Record<CreatorEvent, string> = {
 };
 
 export default async function StatsPage() {
-  const creators = await loadCreators();
+  const creators = await loadCreatorsFresh();
   const stats = await loadStats(creators.map((c) => c.slug));
   const configured = isEventStoreConfigured();
 
