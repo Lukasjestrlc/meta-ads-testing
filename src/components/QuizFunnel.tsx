@@ -54,6 +54,20 @@ function firePixel(event: string, params?: Record<string, unknown>) {
 }
 
 /**
+ * Fires a *custom* Pixel event (uses fbq("trackSingleCustom", …)) so we can
+ * tag funnel-step touchpoints distinctly without inflating the standard
+ * `Lead` count. Each name shows up in Events Manager under its own row, can
+ * still be used for Custom Conversions, but doesn't compete with the
+ * conversion-grade events Meta optimizes against.
+ */
+function firePixelCustom(event: string, params?: Record<string, unknown>) {
+  if (typeof window === "undefined") return;
+  const fbq = (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq;
+  if (!fbq || !PIXEL_ID) return;
+  fbq("trackSingleCustom", PIXEL_ID, event, params);
+}
+
+/**
  * Logs a funnel event to our internal counter API, used by /admin/stats.
  * Fire-and-forget — failures are silent so analytics never blocks UX.
  * `keepalive` ensures the request still completes if the user navigates
@@ -121,18 +135,14 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
   }, [step.kind, likes, matchedStages, creators]);
 
   function start() {
-    firePixel("Lead", {
-      content_name: "started_swiping",
-      content_category: "creator_match",
-    });
+    firePixelCustom("StartedSwiping", { content_category: "creator_match" });
     trackInternal("started_swiping");
     setStep({ kind: "swiping" });
   }
 
   function onSwipeComplete(likedSlugs: string[]) {
     setLikes(likedSlugs);
-    firePixel("Lead", {
-      content_name: "swipe_complete",
+    firePixelCustom("SwipeComplete", {
       content_category: "creator_match",
       num_liked: likedSlugs.length,
     });
@@ -151,8 +161,7 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
   }
 
   function onWheelResult(slug: string) {
-    firePixel("Lead", {
-      content_name: "wheel_result",
+    firePixelCustom("WheelResult", {
       content_category: "creator_match",
       content_ids: [slug],
     });
@@ -163,9 +172,13 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
   }
 
   function onMatchContinue() {
+    // The single canonical Lead in the funnel — visitor saw the match and
+    // tapped through. Strongest pre-redirect intent signal; everything earlier
+    // is custom-event noise, everything later is a conversion.
     firePixel("Lead", {
       content_name: "match_continue",
       content_category: "creator_match",
+      content_ids: [targetCreator.slug],
     });
     trackInternal("match_continue", targetCreator.slug);
     // Quiz step was removed — the wheel + match screen already do the
@@ -175,8 +188,7 @@ export default function QuizFunnel({ creators }: { creators: Creator[] }) {
   }
 
   function onPrepContinue() {
-    firePixel("Lead", {
-      content_name: "prep_continue",
+    firePixelCustom("PrepContinue", {
       content_category: "creator_match",
     });
     trackInternal("prep_continue");
@@ -918,10 +930,7 @@ function Wheel({
     const sliceCenter = winner * sliceAngle + sliceAngle / 2;
     const final = FULL_TURNS * 360 + (360 - sliceCenter);
 
-    firePixel("Lead", {
-      content_name: "wheel_spin",
-      content_category: "creator_match",
-    });
+    firePixelCustom("WheelSpin", { content_category: "creator_match" });
     trackInternal("wheel_spin");
 
     setWinnerIdx(winner);
