@@ -52,6 +52,10 @@ export default function AdminClient({
   const [drafts, setDrafts] = useState<Draft[]>(() => initial.map(toDraft));
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
+  // Drafts that have an in-flight photo upload. Save is blocked while
+  // any are pending so the URL can't get baked into the JSON commit
+  // before the upload action returns it.
+  const [uploadingIds, setUploadingIds] = useState<Set<string>>(new Set());
   const [feedback, setFeedback] = useState<{
     kind: "ok" | "err";
     msg: string;
@@ -250,6 +254,20 @@ export default function AdminClient({
                 onRemove={() => remove(draft._id)}
                 onMoveUp={() => move(draft._id, -1)}
                 onMoveDown={() => move(draft._id, 1)}
+                onUploadStart={() =>
+                  setUploadingIds((s) => {
+                    const next = new Set(s);
+                    next.add(draft._id);
+                    return next;
+                  })
+                }
+                onUploadEnd={() =>
+                  setUploadingIds((s) => {
+                    const next = new Set(s);
+                    next.delete(draft._id);
+                    return next;
+                  })
+                }
               />
             );
           })}
@@ -302,10 +320,16 @@ export default function AdminClient({
             </button>
             <button
               onClick={save}
-              disabled={pending}
+              disabled={pending || uploadingIds.size > 0}
               className="bg-gradient-pink text-white font-bold py-2.5 px-6 rounded-full text-sm shadow-[0_4px_18px_-4px_rgba(240,117,179,0.6)] active:scale-[0.98] transition-all disabled:opacity-60"
             >
-              {pending ? "Saving…" : "Save changes"}
+              {pending
+                ? "Saving…"
+                : uploadingIds.size > 0
+                  ? `Uploading ${uploadingIds.size} photo${
+                      uploadingIds.size === 1 ? "" : "s"
+                    }…`
+                  : "Save changes"}
             </button>
           </div>
         </div>
@@ -324,6 +348,8 @@ function CreatorEditor({
   onRemove,
   onMoveUp,
   onMoveDown,
+  onUploadStart,
+  onUploadEnd,
 }: {
   draft: Draft;
   index: number;
@@ -334,6 +360,8 @@ function CreatorEditor({
   onRemove: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
+  onUploadStart: () => void;
+  onUploadEnd: () => void;
 }) {
   return (
     <div
@@ -444,6 +472,8 @@ function CreatorEditor({
               slug={draft.slug}
               value={draft.photo}
               onChange={(photo) => onChange({ photo })}
+              onUploadStart={onUploadStart}
+              onUploadEnd={onUploadEnd}
             />
           </Field>
 
@@ -544,10 +574,14 @@ function PhotoField({
   slug,
   value,
   onChange,
+  onUploadStart,
+  onUploadEnd,
 }: {
   slug: string;
   value: string | null;
   onChange: (url: string | null) => void;
+  onUploadStart?: () => void;
+  onUploadEnd?: () => void;
 }) {
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -572,6 +606,7 @@ function PhotoField({
     }
 
     setUploading(true);
+    onUploadStart?.();
     try {
       // Always compress in the browser. A 1600px JPEG @ 0.86 quality is
       // ~200–500KB, which fits Vercel's 4.5MB body cap with room to spare
@@ -589,6 +624,7 @@ function PhotoField({
       setError(e instanceof Error ? e.message : "Upload failed.");
     } finally {
       setUploading(false);
+      onUploadEnd?.();
       if (fileRef.current) fileRef.current.value = "";
     }
   }
