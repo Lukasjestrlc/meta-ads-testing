@@ -13,7 +13,6 @@ import {
   isStoreConfigured,
   loadCreators,
   savePhoto,
-  saveVideo,
   saveCreators,
 } from "@/lib/creatorStore";
 import type { Creator } from "@/data/creators";
@@ -127,10 +126,9 @@ export type UploadResult =
 
 // Vercel caps the serverless function body at 4.5MB regardless of plan.
 // We accept up to ~4MB base64 (≈3MB raw) so there's room for the JSON
-// envelope around the payload. The client compresses photos before upload
-// to land well under this; videos have to come in pre-trimmed.
+// envelope around the payload. The client compresses photos in the
+// browser before upload to land well under this.
 const MAX_PHOTO_BASE64_BYTES = 4 * 1024 * 1024;
-const MAX_VIDEO_BASE64_BYTES = 4 * 1024 * 1024;
 
 function notConfigured(): UploadResult {
   return {
@@ -169,34 +167,6 @@ export async function uploadCreatorPhotoAction(
   }
 }
 
-export async function uploadCreatorVideoAction(
-  slug: string,
-  filename: string,
-  base64: string
-): Promise<UploadResult> {
-  await requireAdmin();
-  if (!isStoreConfigured()) return notConfigured();
-
-  if (!base64) return { ok: false, error: "No file data received." };
-  if (base64.length > MAX_VIDEO_BASE64_BYTES) {
-    return {
-      ok: false,
-      error:
-        "Video too large for Vercel's 4.5 MB body limit. Use ≤3 MB clip or a hosted URL.",
-    };
-  }
-
-  try {
-    const url = await saveVideo(slug, filename, base64);
-    return { ok: true, url };
-  } catch (e) {
-    return {
-      ok: false,
-      error: e instanceof Error ? e.message : "Upload failed.",
-    };
-  }
-}
-
 function normalizeCreator(c: Creator): Creator {
   return {
     slug: c.slug.trim(),
@@ -204,7 +174,6 @@ function normalizeCreator(c: Creator): Creator {
     age: Number.isFinite(c.age) ? Math.max(18, Math.floor(c.age)) : 21,
     bio: (c.bio ?? "").trim(),
     photo: c.photo?.trim() ? c.photo.trim() : null,
-    video: c.video?.trim() ? c.video.trim() : null,
     destUrl: c.destUrl.trim(),
     activity: (c.activity ?? "").trim(),
   };

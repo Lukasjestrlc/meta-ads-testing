@@ -15,7 +15,6 @@ import { CREATORS as SEED, type Creator } from "@/data/creators";
 const REPO_PATH = "data/creators.json"; // path inside the repo (forward-slash)
 const LOCAL_PATH = path.join("data", "creators.json");
 const PHOTO_DIR = "public/creators";
-const VIDEO_DIR = "public/creators/videos";
 
 export function isStoreConfigured(): boolean {
   return !!(process.env.GITHUB_TOKEN && process.env.GITHUB_REPO);
@@ -174,29 +173,3 @@ export async function savePhoto(
   return `/creators/${safeSlug}.${ext}?v=${Date.now()}`;
 }
 
-/**
- * Commits a base64-encoded video to public/creators/videos/<slug>.<ext> and
- * returns the absolute-from-root URL. Same shape as savePhoto but for
- * H.264-friendly video formats. Cap large files in the calling action;
- * GitHub's Contents API rejects > 100MB hard, and even 25MB+ uploads via
- * base64 are slow and unreliable.
- */
-export async function saveVideo(
-  slug: string,
-  filename: string,
-  base64: string
-): Promise<string> {
-  const safeSlug = sanitizeSlug(slug);
-  const rawExt = filename.toLowerCase().split(".").pop() ?? "";
-  const allowed = new Set(["mp4", "webm", "mov", "m4v"]);
-  const ext = allowed.has(rawExt) ? rawExt : "mp4";
-
-  const repoFile = `${VIDEO_DIR}/${safeSlug}.${ext}`;
-  await commitFile({
-    path: repoFile,
-    contentB64: base64,
-    message: `Upload video for ${safeSlug}`,
-  });
-
-  return `/creators/videos/${safeSlug}.${ext}?v=${Date.now()}`;
-}

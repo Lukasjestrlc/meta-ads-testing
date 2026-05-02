@@ -780,18 +780,7 @@ function Swiping({
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerCancel}
           >
-            {current.video ? (
-              <video
-                key={current.video}
-                src={current.video}
-                autoPlay
-                muted
-                loop
-                playsInline
-                preload="metadata"
-                className="absolute inset-0 w-full h-full object-cover pointer-events-none"
-              />
-            ) : current.photo ? (
+            {current.photo ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={current.photo}

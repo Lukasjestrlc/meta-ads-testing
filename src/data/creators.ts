@@ -13,7 +13,6 @@ export type Creator = {
   age: number;
   bio: string;
   photo: string | null;
-  video: string | null;
   destUrl: string;
   // Activity tag shown on cards. Empty string = render-time random pick.
   activity: string;
@@ -27,7 +26,6 @@ export const CREATORS: Creator[] = [
     bio: "Sun-chasing, coffee-loving, weekend hiker.",
     photo:
       "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800&auto=format&fit=crop&q=80",
-    video: null,
     destUrl: "https://www.fanvue.com/kyliefromsweets/fv-16",
     activity: "active today",
   },
@@ -38,7 +36,6 @@ export const CREATORS: Creator[] = [
     bio: "Art-school grad, vintage finds, soft mornings.",
     photo:
       "https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=800&auto=format&fit=crop&q=80",
-    video: null,
     destUrl: "https://www.fanvue.com/tinybrunettebabe/fv-18",
     activity: "popular this week",
   },
@@ -49,7 +46,6 @@ export const CREATORS: Creator[] = [
     bio: "Always exploring. Brunch, books, late-night walks.",
     photo:
       "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800&auto=format&fit=crop&q=80",
-    video: null,
     destUrl: "https://www.fanvue.com/janesweety/fv-17",
     activity: "replied today",
   },
@@ -60,7 +56,6 @@ export const CREATORS: Creator[] = [
     bio: "Yoga in the morning, sunsets at the beach.",
     photo:
       "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=800&auto=format&fit=crop&q=80",
-    video: null,
     destUrl: "https://www.fanvue.com/lorna_xlove/fv-28",
     activity: "active today",
   },

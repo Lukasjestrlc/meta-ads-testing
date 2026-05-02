@@ -7,7 +7,6 @@ import {
   resetToSeedAction,
   saveCreatorsAction,
   uploadCreatorPhotoAction,
-  uploadCreatorVideoAction,
 } from "./actions";
 
 type Draft = Creator & { _id: string };
@@ -38,7 +37,6 @@ function blankCreator(): Draft {
     age: 21,
     bio: "",
     photo: null,
-    video: null,
     destUrl: "",
     activity: "", // empty = render-time random
   };
@@ -353,7 +351,7 @@ function CreatorEditor({
           className="flex items-center gap-3 flex-1 min-w-0 text-left"
           aria-expanded={expanded}
         >
-          <Thumb url={draft.photo} hasVideo={!!draft.video} />
+          <Thumb url={draft.photo} />
           <div className="flex-1 min-w-0">
             <div className="flex items-baseline gap-1.5">
               <span className="text-sm font-bold truncate">
@@ -369,7 +367,6 @@ function CreatorEditor({
             </div>
             <div className="text-[11px] text-neutral-400 truncate">
               {draft.activity || "Random activity"}
-              {draft.video ? " · 🎥 video" : ""}
             </div>
           </div>
         </button>
@@ -450,14 +447,6 @@ function CreatorEditor({
             />
           </Field>
 
-          <Field label="Video (optional)">
-            <VideoField
-              slug={draft.slug}
-              value={draft.video}
-              onChange={(video) => onChange({ video })}
-            />
-          </Field>
-
           <Field label="Destination URL (tracking link)">
             <input
               value={draft.destUrl}
@@ -506,7 +495,7 @@ function CreatorEditor({
   );
 }
 
-function Thumb({ url, hasVideo }: { url: string | null; hasVideo: boolean }) {
+function Thumb({ url }: { url: string | null }) {
   return (
     <div className="relative w-12 h-12 rounded-xl overflow-hidden bg-white/[0.04] border border-white/10 flex-shrink-0 grid place-items-center text-[8px] text-neutral-500">
       {url ? (
@@ -521,11 +510,6 @@ function Thumb({ url, hasVideo }: { url: string | null; hasVideo: boolean }) {
         />
       ) : (
         "no photo"
-      )}
-      {hasVideo && (
-        <span className="absolute bottom-0.5 right-0.5 text-[9px] bg-black/70 rounded px-1">
-          ▶
-        </span>
       )}
     </div>
   );
@@ -653,107 +637,6 @@ function PhotoField({
         <p className="text-[10px] text-neutral-500">
           Uploads commit to <span className="font-mono">public/creators/</span>{" "}
           and live within ~30–60s of saving.
-        </p>
-      )}
-    </div>
-  );
-}
-
-function VideoField({
-  slug,
-  value,
-  onChange,
-}: {
-  slug: string;
-  value: string | null;
-  onChange: (url: string | null) => void;
-}) {
-  const fileRef = useRef<HTMLInputElement | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function pickFile(file: File) {
-    setError(null);
-    if (!slug.trim()) {
-      setError("Set the slug first.");
-      return;
-    }
-    if (!file.type.startsWith("video/")) {
-      setError("That doesn't look like a video.");
-      return;
-    }
-    // Vercel caps serverless function bodies at 4.5MB regardless of plan,
-    // and videos can't be compressed in the browser the way photos can.
-    // 3MB raw is the practical ceiling — a few seconds of mp4. For longer
-    // clips, paste a CDN URL into the field below.
-    if (file.size > 3 * 1024 * 1024) {
-      setError(
-        "Video too large for direct upload — use ≤3 MB clip, or paste a hosted URL."
-      );
-      return;
-    }
-
-    setUploading(true);
-    try {
-      const base64 = await fileToBase64(file);
-      const res = await uploadCreatorVideoAction(slug, file.name, base64);
-      if (res.ok) {
-        onChange(res.url);
-      } else {
-        setError(res.error);
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Upload failed.");
-    } finally {
-      setUploading(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
-  }
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2 flex-wrap">
-        <button
-          type="button"
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          className="bg-white/[0.06] border border-white/15 rounded-xl px-3 py-2 text-sm font-bold hover:bg-white/[0.1] active:scale-95 transition-all disabled:opacity-50"
-        >
-          {uploading ? "Uploading…" : value ? "Replace video" : "Upload video"}
-        </button>
-        {value ? (
-          <button
-            type="button"
-            onClick={() => onChange(null)}
-            disabled={uploading}
-            className="text-xs text-neutral-400 hover:text-red-400 transition-colors disabled:opacity-50"
-          >
-            Remove
-          </button>
-        ) : null}
-        <input
-          ref={fileRef}
-          type="file"
-          accept="video/mp4,video/webm,video/quicktime"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) pickFile(file);
-          }}
-        />
-      </div>
-      <input
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value || null)}
-        className={inputClass}
-        placeholder="…or paste a video URL"
-      />
-      {error ? (
-        <p className="text-xs text-red-400">{error}</p>
-      ) : (
-        <p className="text-[10px] text-neutral-500">
-          MP4 / WebM / MOV, ≤3 MB direct upload (Vercel body limit). Paste
-          a CDN URL for longer clips. Plays muted on the swipe card if set.
         </p>
       )}
     </div>

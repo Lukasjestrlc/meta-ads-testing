@@ -1,38 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
 import { type Creator, pickActivity } from "@/data/creators";
 
 const PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 
 /**
  * Result-screen creator card. Renders a polished tile with a compatibility
- * percentage chip in the top-right, age/city in the meta line, name + tags
- * over a dark gradient. Click fires Pixel events and navigates to /go which
- * redirects to the destination Fanvue URL.
+ * percentage chip in the top-right, name over a dark gradient. Click fires
+ * Pixel events and navigates to /go which redirects to the destination
+ * Fanvue URL.
  */
 export default function CreatorCard({ creator }: { creator: Creator }) {
-  const linkRef = useRef<HTMLAnchorElement>(null);
-  const [showVideo, setShowVideo] = useState(false);
-
-  useEffect(() => {
-    if (!creator.video || showVideo) return;
-    const node = linkRef.current;
-    if (!node) return;
-    const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0]?.isIntersecting) {
-          setShowVideo(true);
-          obs.disconnect();
-        }
-      },
-      { rootMargin: "300px" },
-    );
-    obs.observe(node);
-    return () => obs.disconnect();
-  }, [creator.video, showVideo]);
-
   function onClick() {
     if (typeof window === "undefined") return;
     const fbq = (window as unknown as { fbq?: (...args: unknown[]) => void }).fbq;
@@ -49,27 +28,12 @@ export default function CreatorCard({ creator }: { creator: Creator }) {
 
   return (
     <Link
-      ref={linkRef}
       href={`/go?slug=${encodeURIComponent(creator.slug)}`}
       onClick={onClick}
       className="group relative block aspect-[3/4] rounded-3xl overflow-hidden bg-neutral-900 ring-1 ring-white/10 hover:ring-white/30 shadow-[0_8px_28px_-8px_rgba(0,0,0,0.7)] hover:shadow-[0_16px_44px_-8px_rgba(240,117,179,0.25)] transition-all duration-300"
     >
       {/* Media */}
-      {creator.video ? (
-        showVideo ? (
-          <video
-            src={creator.video}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.06]"
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-          />
-        ) : (
-          <div className="absolute inset-0 bg-neutral-900" />
-        )
-      ) : creator.photo ? (
+      {creator.photo ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
           src={creator.photo}
