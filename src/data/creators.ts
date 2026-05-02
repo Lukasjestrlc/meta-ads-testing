@@ -23,7 +23,7 @@ export const CREATORS: Creator[] = [
     slug: "k1",
     name: "Kylie",
     age: 23,
-    bio: "Sun-chasing, coffee-loving, weekend hiker.",
+    bio: "Coffee mornings, hikes at sunset, late-night chats. DMs always open 💌",
     photo:
       "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=800&auto=format&fit=crop&q=80",
     destUrl: "https://www.fanvue.com/kyliefromsweets/fv-16",
@@ -33,7 +33,7 @@ export const CREATORS: Creator[] = [
     slug: "c1",
     name: "Chloe",
     age: 21,
-    bio: "Art-school grad, vintage finds, soft mornings.",
+    bio: "Soft mornings, sharp opinions. I reply faster than you'd think — try me.",
     photo:
       "https://images.unsplash.com/photo-1488426862026-3ee34a7d66df?w=800&auto=format&fit=crop&q=80",
     destUrl: "https://www.fanvue.com/tinybrunettebabe/fv-18",
@@ -43,7 +43,7 @@ export const CREATORS: Creator[] = [
     slug: "j1",
     name: "Jane",
     age: 24,
-    bio: "Always exploring. Brunch, books, late-night walks.",
+    bio: "Late-night talks are my love language. Looking for someone real to text.",
     photo:
       "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=800&auto=format&fit=crop&q=80",
     destUrl: "https://www.fanvue.com/janesweety/fv-17",
@@ -53,7 +53,7 @@ export const CREATORS: Creator[] = [
     slug: "l1",
     name: "Lorna",
     age: 22,
-    bio: "Yoga in the morning, sunsets at the beach.",
+    bio: "Beach mornings, slow nights, lots to share. Come say hi 🌊",
     photo:
       "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=800&auto=format&fit=crop&q=80",
     destUrl: "https://www.fanvue.com/lorna_xlove/fv-28",
